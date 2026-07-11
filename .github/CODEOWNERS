@@ -1,0 +1,14 @@
+# Security-critical modules require security team review
+/src/poison_detector/auth.py @poojakira
+/src/poison_detector/crypto.py @poojakira
+/src/poison_detector/audit.py @poojakira
+/src/poison_detector/rbac.py @poojakira
+/src/poison_detector/rate_limiter.py @poojakira
+/src/poison_detector/input_sanitizer.py @poojakira
+
+# Infrastructure changes
+/k8s/ @poojakira
+/terraform/ @poojakira
+
+# CI/CD changes
+/.github/ @poojakira
