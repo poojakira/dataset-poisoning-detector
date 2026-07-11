@@ -1,0 +1,37 @@
+# Real-time Dataset Poisoning Detector - Default Configuration
+#
+# This file provides sensible defaults for development/testing.
+# For production, override via environment variables (POISON_* prefix)
+# or mount a custom YAML at deployment time.
+#
+# Precedence: Environment Variables > YAML > Code Defaults
+
+environment: dev
+
+thresholds:
+  zscore_threshold: 3.0
+  iqr_multiplier: 1.5
+  isolation_contamination: 0.05
+  ensemble_vote_threshold: 2
+  similarity_threshold: 0.95
+
+streaming:
+  window_size: 10000
+  refit_interval: 1000
+  drift_sensitivity: 0.01
+  max_batch_size: 512
+
+features:
+  enable_zscore: true
+  enable_iqr: true
+  enable_isolation: true
+  enable_drift_detection: true
+  enable_fingerprinting: true
+  enable_alerting: false
+
+alerts:
+  slack_webhook_url: ""
+  pagerduty_routing_key: ""
+  webhook_urls: []
+  cooldown_seconds: 300
+  poison_rate_alert_threshold: 0.1
