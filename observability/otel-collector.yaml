@@ -1,0 +1,84 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+  memory_limiter:
+    limit_mib: 1024
+    spike_limit_mib: 256
+    check_interval: 1s
+
+  attributes:
+    actions:
+      - key: service.name
+        value: poison-detector
+        action: upsert
+      - key: environment
+        value: production
+        action: upsert
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: poison_detector
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  logging:
+    loglevel: info
+
+service:
+  extensions:
+    - health_check
+    - zpages
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - batch
+      exporters:
+        - otlp/jaeger
+
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - batch
+        - memory_limiter
+      exporters:
+        - prometheus
+
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - batch
+      exporters:
+        - logging
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888

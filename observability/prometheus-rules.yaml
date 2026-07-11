@@ -1,0 +1,130 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: poison-detector-alerts
+  namespace: poison-detector
+  labels:
+    app: poison-detector
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: poison-detector.rules
+      rules:
+        - alert: PoisonRateHigh
+          expr: |
+            (
+              rate(poison_detector_samples_poisoned_total[5m])
+              /
+              rate(poison_detector_samples_processed_total[5m])
+            ) > 0.1
+          for: 5m
+          labels:
+            severity: critical
+            team: ml-security
+          annotations:
+            summary: "Poison rate exceeds 10% threshold"
+            description: >-
+              The poison detection rate has exceeded 10% of processed samples
+              for the past 5 minutes. This may indicate an active data poisoning
+              attack or a significant data quality degradation in the pipeline.
+              Current rate: {{ $value | humanizePercentage }}.
+            runbook_url: "https://github.com/your-org/dataset-poisoning-detector/blob/main/observability/runbooks/high-poison-rate.md"
+
+        - alert: LatencyDegraded
+          expr: |
+            histogram_quantile(0.99, rate(poison_detector_scoring_latency_seconds_bucket[5m])) > 0.2
+          for: 5m
+          labels:
+            severity: warning
+            team: ml-security
+          annotations:
+            summary: "Scoring latency p99 exceeds 200ms"
+            description: >-
+              The 99th percentile scoring latency has exceeded 200ms for 5 minutes.
+              This may impact real-time detection capability and allow poisoned
+              samples to pass through before scoring completes.
+              Current p99: {{ $value | humanizeDuration }}.
+            runbook_url: "https://github.com/your-org/dataset-poisoning-detector/blob/main/observability/runbooks/latency-degradation.md"
+
+        - alert: DriftSpike
+          expr: |
+            poison_detector_drift_score > 0.8
+          for: 2m
+          labels:
+            severity: warning
+            team: ml-security
+          annotations:
+            summary: "Drift score exceeds 0.8 threshold"
+            description: >-
+              The concept drift score has exceeded 0.8 for 2 minutes, indicating
+              a significant distributional shift in incoming data. This could be
+              legitimate concept drift or a slow poisoning campaign attempting to
+              shift the baseline gradually.
+              Current drift score: {{ $value }}.
+            runbook_url: "https://github.com/your-org/dataset-poisoning-detector/blob/main/observability/runbooks/drift-alert.md"
+
+        - alert: DetectorDown
+          expr: |
+            up{job="poison-detector"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: ml-security
+          annotations:
+            summary: "Poison detector instance is down"
+            description: >-
+              The poison detector target {{ $labels.instance }} has been unreachable
+              for more than 1 minute. No samples are being scored during this outage,
+              creating a window where poisoned data can enter the pipeline undetected.
+
+        - alert: QueueBacklog
+          expr: |
+            poison_detector_queue_depth > 1000
+          for: 5m
+          labels:
+            severity: warning
+            team: ml-security
+          annotations:
+            summary: "Sample processing queue backlog exceeds 1000"
+            description: >-
+              The processing queue has more than 1000 pending samples for 5 minutes.
+              This indicates the detector cannot keep up with incoming data volume,
+              increasing latency and potentially allowing unscored samples through
+              if the queue reaches capacity.
+              Current queue depth: {{ $value }}.
+
+        - alert: HighErrorRate
+          expr: |
+            (
+              rate(http_requests_total{job="poison-detector", status=~"5.."}[5m])
+              /
+              rate(http_requests_total{job="poison-detector"}[5m])
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            team: ml-security
+          annotations:
+            summary: "HTTP 5xx error rate exceeds 5%"
+            description: >-
+              More than 5% of HTTP requests to the poison detector are returning
+              5xx errors for the past 5 minutes. This indicates a systemic issue
+              that may be preventing sample scoring entirely.
+              Current error rate: {{ $value | humanizePercentage }}.
+
+        - alert: RefitLatencyHigh
+          expr: |
+            histogram_quantile(0.99, rate(poison_detector_refit_latency_seconds_bucket[5m])) > 30
+          for: 1m
+          labels:
+            severity: warning
+            team: ml-security
+          annotations:
+            summary: "IsolationForest refit p99 latency exceeds 30s"
+            description: >-
+              The 99th percentile refit latency has exceeded 30 seconds. Long refit
+              times block scoring on new baselines and may indicate the baseline
+              window has grown too large or system resources are constrained.
+              Current p99 refit latency: {{ $value | humanizeDuration }}.
+            runbook_url: "https://github.com/your-org/dataset-poisoning-detector/blob/main/observability/runbooks/latency-degradation.md"
