@@ -68,6 +68,14 @@ class SampleRequest(BaseModel):
         max_length=100000,
         description="Feature vector for the sample to score",
     )
+    label: int | None = Field(
+        default=None,
+        description=(
+            "Optional integer class label. Passed through to the response for "
+            "triage; the unsupervised streaming score does not depend on it. "
+            "Provide it so downstream label-aware batch auditing has the label."
+        ),
+    )
     source: str = Field(
         default="api",
         max_length=256,
@@ -86,6 +94,9 @@ class ScoringResponse(BaseModel):
     is_poisoned: bool = Field(description="Whether the sample exceeds the poisoning threshold")
     method_votes: dict[str, bool] = Field(description="Per-method poison votes")
     latency_ms: float = Field(description="Scoring latency in milliseconds")
+    label: int | None = Field(
+        default=None, description="Pass-through label from the request (or null)"
+    )
 
 
 class BatchRequest(BaseModel):
@@ -305,7 +316,9 @@ async def score_sample(request: SampleRequest) -> ScoringResponse:
     Target latency: <10ms for statistical-only, <50ms with isolation forest.
     """
     try:
-        result: ScoringResult = _detector.score_sample(request.features)
+        result: ScoringResult = _detector.score_sample(
+            {"features": request.features, "label": request.label}
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -317,6 +330,7 @@ async def score_sample(request: SampleRequest) -> ScoringResponse:
         is_poisoned=result.is_poisoned,
         method_votes=result.method_votes,
         latency_ms=result.latency_ms,
+        label=result.label,
     )
 
     # Broadcast to WebSocket clients if poisoned

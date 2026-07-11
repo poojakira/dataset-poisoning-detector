@@ -105,6 +105,15 @@ def detect(X: list[list[float]], method: str = "ensemble") -> DetectionReport:
     if method not in valid_methods:
         raise ValueError(f"Unknown method '{method}'. Must be one of {valid_methods}")
 
+    # Backward compatible with the legacy flat-list format, but also accepts the
+    # extended data model (Sample / {"features": [...], "label": ...} dicts).
+    # Labels are not used by these unsupervised methods; use label_aware_detect
+    # for label-flip detection. We coerce here so callers can pass either form.
+    if X and not isinstance(X[0], (list, tuple)):
+        from .sample import coerce_matrix
+
+        X, _labels = coerce_matrix(X)
+
     n_samples = len(X)
 
     if method == "ensemble":

@@ -46,6 +46,9 @@ from typing import Any
 import numpy as np
 from sklearn.ensemble import IsolationForest
 
+from .reduction import DimensionalityReducer
+from .sample import Sample, coerce_sample
+
 
 @dataclass
 class ScoringResult:
@@ -56,12 +59,16 @@ class ScoringResult:
         is_poisoned: Whether the sample exceeds the poisoning threshold.
         method_votes: Dict of method_name -> voted_poisoned (True/False).
         latency_ms: Time taken to score this sample in milliseconds.
+        label: The optional label carried by the input sample (passed through
+            for triage; the unsupervised streaming path does not use it to
+            score). None when the sample was unlabeled.
     """
 
     score: float
     is_poisoned: bool
     method_votes: dict[str, bool] = field(default_factory=dict)
     latency_ms: float = 0.0
+    label: int | None = None
 
 
 @dataclass
@@ -180,6 +187,8 @@ class StreamingDetector:
         refit_interval: int = 1000,
         zscore_threshold: float = 3.0,
         vote_threshold: int = 2,
+        reduce_dim: int | None = None,
+        reduce_method: str = "gaussian",
     ) -> None:
         """Initialize the streaming detector.
 
@@ -190,6 +199,14 @@ class StreamingDetector:
             refit_interval: Clean samples between IsolationForest refits.
             zscore_threshold: Z-score threshold for statistical anomaly flagging.
             vote_threshold: Minimum method votes to flag as poisoned.
+            reduce_dim: If set, project incoming samples to this many dimensions
+                BEFORE z-score / IsolationForest scoring. Essential for
+                high-dimensional inputs (e.g. 768-dim embeddings) where the
+                isolation path would otherwise blow the latency budget and lose
+                signal in the noise. None disables reduction (default).
+            reduce_method: "gaussian" (random projection, data-independent, the
+                safe default for very high dimensions) or "pca" (fit on the
+                baseline; keeps max-variance directions).
         """
         self.window_size = window_size
         self.contamination = contamination
@@ -197,6 +214,8 @@ class StreamingDetector:
         self.refit_interval = refit_interval
         self.zscore_threshold = zscore_threshold
         self.vote_threshold = vote_threshold
+        self.reduce_dim = reduce_dim
+        self.reduce_method = reduce_method
 
         # State
         self._welford: WelfordAccumulator | None = None
@@ -204,6 +223,7 @@ class StreamingDetector:
         self._model: IsolationForest | None = None
         self._samples_since_refit: int = 0
         self._n_features: int | None = None
+        self._reducer: DimensionalityReducer | None = None
 
         # Stats tracking
         self._samples_seen: int = 0
@@ -216,21 +236,63 @@ class StreamingDetector:
         self._n_features = n_features
         self._welford = WelfordAccumulator(n_features)
 
-    def score_sample(self, sample: list[float] | np.ndarray) -> ScoringResult:
+    def _project(self, sample_arr: np.ndarray) -> np.ndarray:
+        """Apply dimensionality reduction to a single sample if configured.
+
+        For Gaussian random projection the reducer can be fit lazily on the very
+        first sample (it only needs the input dimensionality). For PCA a fit
+        requires multiple rows, so callers should establish a baseline via
+        update_baseline() first; until then PCA reduction is a pass-through.
+        """
+        if self.reduce_dim is None:
+            return sample_arr
+
+        if self._reducer is None or not self._reducer._fitted:
+            self._reducer = DimensionalityReducer(
+                method=self.reduce_method, n_components=self.reduce_dim
+            )
+            if self.reduce_method == "gaussian":
+                # Random projection needs only the dimensionality -> lazy fit OK.
+                self._reducer.fit(sample_arr.reshape(1, -1))
+            else:
+                # No baseline yet for PCA: cannot fit on one row; pass through.
+                return sample_arr
+
+        return self._reducer.transform(sample_arr.reshape(1, -1))[0]
+
+    def score_sample(
+        self, sample: list[float] | np.ndarray | Sample | dict
+    ) -> ScoringResult:
         """Score a single sample for poisoning indicators.
 
         Combines z-score based statistical anomaly detection with
         IsolationForest predictions (when a model is fitted).
 
         Args:
-            sample: Feature vector as list of floats or numpy array.
+            sample: The sample to score. Accepts the legacy flat formats (list of
+                floats or numpy array) as well as the extended data model
+                (a Sample or a {"features": [...], "label": ...} dict). Any label
+                is passed through to the result but does not influence the
+                unsupervised score.
 
         Returns:
-            ScoringResult with score, is_poisoned flag, method votes, and latency.
+            ScoringResult with score, is_poisoned flag, method votes, latency,
+            and the pass-through label.
         """
         start = time.perf_counter()
 
-        sample_arr = np.asarray(sample, dtype=np.float64)
+        # Accept the extended data model while preserving legacy behavior.
+        if isinstance(sample, (Sample, dict)):
+            coerced = coerce_sample(sample)
+            label = coerced.label
+            sample_arr = np.asarray(coerced.features, dtype=np.float64)
+        else:
+            label = None
+            sample_arr = np.asarray(sample, dtype=np.float64)
+
+        # Project to a lower dimension first if configured (before feature init
+        # so the Welford/IsolationForest state matches the reduced space).
+        sample_arr = self._project(sample_arr)
 
         # Lazy initialization on first sample
         if self._n_features is None:
@@ -291,6 +353,7 @@ class StreamingDetector:
             is_poisoned=is_poisoned,
             method_votes=method_votes,
             latency_ms=elapsed_ms,
+            label=label,
         )
 
     def score_batch(
@@ -322,6 +385,17 @@ class StreamingDetector:
         clean_arr = np.asarray(clean_samples, dtype=np.float64)
         if clean_arr.ndim == 1:
             clean_arr = clean_arr.reshape(1, -1)
+
+        # Fit dimensionality reduction on the (known-clean) baseline, then work
+        # entirely in the reduced space so Welford stats and the IsolationForest
+        # match the space score_sample() will operate in.
+        if self.reduce_dim is not None:
+            self._reducer = DimensionalityReducer(
+                method=self.reduce_method, n_components=self.reduce_dim
+            )
+            clean_arr = np.asarray(
+                self._reducer.fit_transform(clean_arr), dtype=np.float64
+            )
 
         n_samples, n_features = clean_arr.shape
 
@@ -389,6 +463,7 @@ class StreamingDetector:
         self._model = None
         self._samples_since_refit = 0
         self._n_features = None
+        self._reducer = None
         self._samples_seen = 0
         self._poison_count = 0
         self._total_latency_ms = 0.0
