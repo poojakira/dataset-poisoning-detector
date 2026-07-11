@@ -36,6 +36,11 @@ realtime = [
 kafka = [
     "aiokafka>=0.10",
 ]
+security = [
+    "cryptography>=42.0",
+    "PyJWT>=2.8",
+    "bcrypt>=4.1",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
