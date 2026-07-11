@@ -5,6 +5,9 @@ This library provides multiple anomaly detection methods (z-score, IQR, Isolatio
 and an ensemble approach that combines them via majority voting for robust detection of
 poisoned training data.
 
+v0.2.0 adds real-time streaming detection, concept drift monitoring, sample fingerprinting,
+quarantine storage, multi-channel alerting, and a FastAPI service for production deployment.
+
 Public API:
     - detect(): Main entry point for running detection
     - PoisonResult: Per-sample result dataclass
@@ -16,6 +19,14 @@ Public API:
     - format_report(): Human-readable report formatting
     - export_json(): JSON export
     - export_csv(): CSV export
+
+Real-Time API (requires `pip install -e ".[realtime]"`):
+    - StreamingDetector: Online scoring with rolling statistics
+    - ConceptDriftDetector: ADWIN + Page-Hinkley drift detection
+    - SampleFingerprinter: Bloom filter + cosine similarity deduplication
+    - QuarantineStore / SQLiteStore: Flagged sample storage
+    - AlertDispatcher: Multi-channel alerting with deduplication
+    - DetectorConfig: Pydantic-based configuration management
 """
 
 from .detector import PoisonResult, DetectionReport, detect
@@ -37,4 +48,30 @@ __all__ = [
     "export_csv",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
+
+# Conditional imports for real-time modules (require [realtime] extras)
+try:
+    from .stream import StreamingDetector
+    from .drift import ConceptDriftDetector
+    from .fingerprint import SampleFingerprinter
+    from .config import DetectorConfig
+    from .metrics import SAMPLES_PROCESSED, SAMPLES_POISONED, SCORING_LATENCY
+    from .storage import QuarantineStore, SQLiteStore
+    from .alerting import AlertDispatcher
+
+    __all__ += [
+        "StreamingDetector",
+        "ConceptDriftDetector",
+        "SampleFingerprinter",
+        "DetectorConfig",
+        "SAMPLES_PROCESSED",
+        "SAMPLES_POISONED",
+        "SCORING_LATENCY",
+        "QuarantineStore",
+        "SQLiteStore",
+        "AlertDispatcher",
+    ]
+except ImportError:
+    # Real-time dependencies not installed -- core API still works
+    pass
