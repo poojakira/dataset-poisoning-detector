@@ -211,12 +211,16 @@ class ConnectionManager:
             self._active_connections.remove(websocket)
 
     async def broadcast(self, message: dict[str, Any]) -> None:
-        """Broadcast a message to all connected clients."""
+        """Broadcast a message to all connected clients.
+
+        Catches all exceptions during send to prevent dead connections
+        from accumulating (e.g., ConnectionResetError, OSError).
+        """
         disconnected: list[WebSocket] = []
         for connection in self._active_connections:
             try:
                 await connection.send_json(message)
-            except (WebSocketDisconnect, RuntimeError):
+            except Exception:
                 disconnected.append(connection)
 
         for conn in disconnected:
@@ -255,7 +259,14 @@ app = FastAPI(
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next: Any) -> Any:
-    """Apply rate limiting based on X-API-Key header."""
+    """Apply rate limiting based on X-API-Key header.
+
+    Security Note:
+        The X-API-Key header is used for rate-limit bucketing only, not for
+        authentication. This is by design for an internal service where
+        network-level access control (VPC, service mesh) provides the security
+        boundary. Requests without the header are bucketed as "anonymous".
+    """
     # Skip rate limiting for health and metrics endpoints
     if request.url.path in ("/health", "/stats", "/metrics"):
         return await call_next(request)
