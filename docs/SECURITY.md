@@ -40,17 +40,26 @@ Used for user-facing authentication and cross-service identity propagation.
 | Algorithm | RS256 (RSA 2048-bit minimum, 4096-bit recommended) |
 | Token lifetime | 5-15 minutes (short-lived) |
 | Refresh mechanism | Refresh token rotation (external IdP) |
-| Claims validated | iss, aud, exp, sub, roles |
+| Claims validated | iss, aud, exp, sub, roles, jti |
 | Symmetric algorithms | Explicitly rejected (HS256/HS384/HS512 blocked) |
+| Revocation | **Supported (v1.1.0)** — `jti`-based TTL-bounded denylist |
 
 **Trust model**: The identity provider holds the private key. This service only has the
 public key and can validate tokens but cannot issue them. Compromise of the public key
 does not allow token forgery.
 
+**Revocation (v1.1.0)**: `auth.TokenDenylist` + `JWTAuthenticator.revoke(jti, exp)`
+add revocation on top of stateless validation. When a token's `jti` is on the
+denylist, a signature-valid token is denied; entries are TTL-bounded (only kept
+until the token would expire anyway). Supply a `jti` claim in issued tokens for
+this to apply.
+
 **Limitations**:
-- No token revocation (stateless validation). A stolen token is valid until expiry.
+- The denylist is in-memory and per-process. For multi-replica deployments, back
+  it with a shared store (Redis) so a revocation on one replica is honored by all;
+  short token lifetimes (5-15 minutes) bound the exposure in the meantime.
+- Tokens minted without a `jti` claim cannot be individually revoked.
 - No JWKS endpoint rotation support (public key is configured at deployment).
-- Short token lifetimes (5-15 minutes) mitigate the revocation gap.
 
 ### API Keys -- Programmatic Access
 

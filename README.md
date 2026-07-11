@@ -65,6 +65,54 @@ report = detect(X, method="isolation")  # Isolation Forest only
 report = detect(X, method="ensemble")   # Majority vote (default)
 ```
 
+### New in v1.1.0 — covariance-aware, label-aware, and loss-based methods
+
+The batch `detect()` above is unchanged. v1.1.0 adds detectors that cover the
+attacks the original three miss, usable directly or via the calibrated ensemble
+in the benchmark harness:
+
+```python
+from poison_detector import (
+    spectral_detect,       # SVD covariance-aware: catches CORRELATION poisoning
+    label_aware_detect,    # kNN label disagreement: catches LABEL FLIPPING
+    influence_detect,      # surrogate loss/influence (approximate)
+)
+
+flagged = spectral_detect(X, quantile=0.95)                 # no labels needed
+flagged = label_aware_detect(X, y, threshold=0.7)           # needs labels y
+flagged = influence_detect(X, y, quantile=0.95)             # needs labels y
+```
+
+### Honest, real-data benchmark
+
+`examples/benchmark.py` loads a **real** scikit-learn dataset, injects poison at
+known indices, runs every method + the calibrated ensemble, and prints a
+precision/recall/F1/ROC-AUC scorecard (with JSON export). Nothing is
+hand-picked — reproduce it yourself:
+
+```bash
+python examples/benchmark.py            # breast_cancer by default
+python examples/benchmark.py --dataset digits --json scorecard.json
+```
+
+Measured on breast cancer (569×30), averaged over 2/5/10% contamination:
+the **calibrated ensemble reaches ROC-AUC ≈ 0.94, precision ≈ 0.44** (vs the old
+synthetic-demo ~0.18 precision). Per-attack, each is carried by a specialist:
+label-flip → `label_aware` (F1 ≈ 0.9), correlation → `spectral` (F1 ≈ 0.59),
+duplicates → fingerprint (F1 ≈ 1.0). See `docs/ENGINEERING_GUIDE.md` §24 for the
+full table and honest caveats (small/clean datasets; hard-threshold precision on
+duplicate/correlation attacks is modest despite high AUC).
+
+### High-dimensional embeddings
+
+For 768-dim-style embeddings, project before the isolation path:
+
+```python
+detector = StreamingDetector(reduce_dim=64, reduce_method="gaussian")
+```
+
+See `examples/embedding_demo.py` for the end-to-end TF-IDF path.
+
 ## Feature Attribution
 
 Once samples are flagged, understand which features caused the anomaly:
@@ -88,7 +136,7 @@ from poison_detector import StreamingDetector, ConceptDriftDetector, SampleFinge
 
 # Initialize with your pipeline's parameters
 detector = StreamingDetector(window_size=10000, contamination=0.05)
-drift = ConceptDriftDetector(sensitivity=0.01)
+drift = ConceptDriftDetector(delta=0.01)  # note: kwarg is `delta`, not `sensitivity`
 fingerprinter = SampleFingerprinter(similarity_threshold=0.95)
 
 # Score individual samples as they arrive
@@ -166,7 +214,7 @@ legitimate data).
 
 ```python
 # Validate preference pairs before they enter the RLHF pipeline
-drift_detector = ConceptDriftDetector(sensitivity=0.005)
+drift_detector = ConceptDriftDetector(delta=0.005)  # kwarg is `delta`
 fingerprinter = SampleFingerprinter(similarity_threshold=0.98)
 
 def validate_preference_pair(chosen_embedding, rejected_embedding):
@@ -263,6 +311,12 @@ With FastAPI service (4 uvicorn workers):
 | Batch throughput    | 45,000 samples/sec | POST /batch, 512 samples per request |
 | WebSocket throughput| 15,000 events/sec | Streaming detection results           |
 
+**v1.1.0 vectorized batch path** (`StreamingDetector.score_batch_vectorized`),
+measured on 10-dim data, single core, statistical path: **~1,330,000 samples/sec**
+(~25× the per-sample path, which measures ~50,000/sec). CI asserts conservative
+floors of 100,000/sec (vectorized) and 10,000/sec (per-sample). The full-ensemble
+100K+/sec target under realistic concurrency remains unproven.
+
 ### When NOT to Use Real-Time Mode
 
 Be honest about the overhead. Real-time detection adds latency and complexity to your
@@ -320,33 +374,41 @@ pip install -e ".[dev,realtime]"
 
 ## What It Doesn't Catch
 
-Being honest about limitations is more useful than pretending they don't exist:
+Being honest about limitations is more useful than pretending they don't exist.
+v1.1.0 closed several of the old gaps — here's the current, honest picture:
 
-- **Clean-label attacks**: If the attacker poisons labels without changing features,
-  all feature-space methods are blind to it. You need label-consistency checking
-  (comparing against a trusted held-out set) for those.
+- **Label / clean-label attacks** — *now partially covered.* With labels supplied,
+  `label_aware_detect` (kNN label disagreement) flags label-flips that feature-only
+  methods miss (F1 ≈ 0.9 on the benchmark). Without labels, they remain invisible.
 
-- **Distributed poisoning**: Small perturbations spread across many samples that
-  individually look normal but collectively shift the decision boundary. Each sample
-  passes every threshold, but the aggregate effect is malicious.
+- **Feature-correlation mimicry** — *now partially covered.* `spectral_detect`'s
+  covariance-residual score catches samples whose features are individually in-range
+  but jointly impossible (correlation poisoning) — the classic blind spot of
+  per-feature z-score/IQR/Welford. Streaming (online) correlation detection is still
+  future work; spectral is a batch method.
 
-- **Feature-space mimicry**: Adversarial samples crafted to look statistically normal
-  on every feature independently while exploiting feature correlations that our methods
-  don't model.
+- **Distributed poisoning**: Small perturbations spread across many individually-normal
+  samples that collectively shift the boundary. Each sample passes every threshold;
+  the aggregate effect is malicious. Still hard.
 
-- **Temporal drift confusion**: In streaming data, legitimate distribution shift looks
-  identical to poisoning. The drift detector helps distinguish the two, but adversarial
-  drift (slow, intentional distribution shift) remains challenging.
+- **Temporal drift confusion**: Legitimate distribution shift looks like poisoning.
+  The drift detector helps, but adversarial slow drift remains challenging.
 
-- **High-dimensional masking**: Isolation Forest effectiveness degrades in very high
-  dimensions (>100 features) because random splits become less discriminative. PCA or
-  feature selection should be applied first for high-dimensional data.
+- **High-dimensional masking** — *now mitigated.* Isolation Forest degrades above ~100
+  dims; set `reduce_dim` (PCA / Gaussian random projection) to project first. The
+  guaranteed <50ms p99 at 768-dim under load is still config/hardware dependent.
+
+- **Large-scale real-world validation**: the benchmark uses small, clean bundled
+  datasets. Treat scores as a human-review triage signal until validated on your own
+  large, labeled, adversarial data.
 
 ## Running Tests
 
 ```bash
-pip install -e ".[dev,realtime]"
+pip install -e ".[dev,realtime,security]"
 pytest tests/ -v
+# Coverage (276 tests, 94% as of v1.1.0):
+pytest tests/ --cov=poison_detector --cov-report=term-missing
 ```
 
 ## Docker Deployment
