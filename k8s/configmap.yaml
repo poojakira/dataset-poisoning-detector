@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: poison-detector-config
+  namespace: poison-detector
+  labels:
+    app: poison-detector
+    component: config
+    version: v1
+    app.kubernetes.io/name: poison-detector
+    app.kubernetes.io/component: config
+data:
+  POISON_ENVIRONMENT: "production"
+  POISON_ZSCORE_THRESHOLD: "3.0"
+  POISON_IQR_MULTIPLIER: "1.5"
+  POISON_ISOLATION_CONTAMINATION: "0.05"
+  POISON_ENSEMBLE_VOTE_THRESHOLD: "2"
+  POISON_SIMILARITY_THRESHOLD: "0.95"
+  POISON_WINDOW_SIZE: "10000"
+  POISON_REFIT_INTERVAL: "1000"
+  POISON_DRIFT_SENSITIVITY: "0.01"
+  POISON_MAX_BATCH_SIZE: "512"
+  POISON_ENABLE_ZSCORE: "true"
+  POISON_ENABLE_IQR: "true"
+  POISON_ENABLE_ISOLATION: "true"
+  POISON_ENABLE_DRIFT_DETECTION: "true"
+  POISON_ENABLE_FINGERPRINTING: "true"
+  POISON_ENABLE_ALERTING: "true"
+  POISON_COOLDOWN_SECONDS: "300"
+  POISON_POISON_RATE_ALERT_THRESHOLD: "0.1"
+  POISON_LOG_LEVEL: "INFO"
+  POISON_METRICS_PORT: "9090"
+  POISON_API_PORT: "8000"
+  POISON_API_HOST: "0.0.0.0"
+  POISON_WORKERS: "4"

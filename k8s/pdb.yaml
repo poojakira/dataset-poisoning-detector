@@ -1,0 +1,17 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: poison-detector
+  namespace: poison-detector
+  labels:
+    app: poison-detector
+    component: api
+    version: v1
+    app.kubernetes.io/name: poison-detector
+    app.kubernetes.io/component: api
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: poison-detector
+      component: api
