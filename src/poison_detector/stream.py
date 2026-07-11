@@ -372,6 +372,118 @@ class StreamingDetector:
         """
         return [self.score_sample(s) for s in samples]
 
+    def score_batch_vectorized(
+        self,
+        samples: list[list[float]] | np.ndarray,
+        update_state: bool = True,
+    ) -> list[ScoringResult]:
+        """Score a whole batch with a single vectorized pass (high throughput).
+
+        The per-sample ``score_sample`` path pays Python-interpreter overhead on
+        every row. This method instead evaluates the z-score check for the entire
+        batch with numpy array ops and calls the IsolationForest exactly once for
+        the batch, which is dramatically faster for bulk auditing / backfill.
+
+        Scoring is performed against the CURRENT baseline (mean/std/model); state
+        is then updated in one batch at the end (clean rows only), rather than
+        incrementally per row. This keeps the throughput win while preserving the
+        "don't let flagged samples pollute the baseline" invariant.
+
+        Args:
+            samples: A list of feature vectors or a 2-D numpy array.
+            update_state: If True, fold the clean rows into the Welford stats and
+                rolling window after scoring. If False, pure read-only scoring.
+
+        Returns:
+            List of ScoringResult in input order.
+        """
+        arr = np.asarray(samples, dtype=np.float64)
+        if arr.ndim == 1:
+            arr = arr.reshape(1, -1)
+        if arr.shape[0] == 0:
+            return []
+
+        # Apply reduction to the whole batch at once, if configured.
+        if self.reduce_dim is not None:
+            if self._reducer is None or not self._reducer._fitted:
+                self._reducer = DimensionalityReducer(
+                    method=self.reduce_method, n_components=self.reduce_dim
+                )
+                if self.reduce_method == "gaussian":
+                    self._reducer.fit(arr)
+                # PCA without a baseline stays pass-through (see _project docstring).
+            if self._reducer is not None and self._reducer._fitted:
+                arr = np.asarray(self._reducer.transform(arr), dtype=np.float64)
+
+        n, d = arr.shape
+        if self._n_features is None:
+            self._initialize_features(d)
+
+        # --- vectorized z-score over the whole batch ---
+        zscore_anomaly = np.zeros(n, dtype=bool)
+        zscore_score = np.zeros(n, dtype=np.float64)
+        if self._welford is not None and self._welford.count >= 10:
+            std = self._welford.std
+            mean = self._welford.mean
+            safe_std = np.where(std > 1e-10, std, 1.0)
+            z = np.abs((arr - mean) / safe_std)
+            max_z = z.max(axis=1)
+            zscore_score = np.minimum(max_z / (self.zscore_threshold * 2), 1.0)
+            zscore_anomaly = max_z > self.zscore_threshold
+
+        # --- single IsolationForest call for the batch ---
+        iso_anomaly = np.zeros(n, dtype=bool)
+        iso_score = np.zeros(n, dtype=np.float64)
+        have_model = self._model is not None
+        if have_model:
+            decision = self._model.decision_function(arr)
+            iso_anomaly = decision < 0
+            iso_score = np.clip(0.5 - decision, 0.0, 1.0)
+
+        # --- aggregate ---
+        votes = zscore_anomaly.astype(int) + iso_anomaly.astype(int)
+        is_poisoned = votes >= self.vote_threshold
+
+        if have_model:
+            final_score = (zscore_score + iso_score) / 2.0
+        else:
+            final_score = zscore_score
+
+        results: list[ScoringResult] = [
+            ScoringResult(
+                score=float(final_score[i]),
+                is_poisoned=bool(is_poisoned[i]),
+                method_votes={
+                    "zscore": bool(zscore_anomaly[i]),
+                    "isolation_forest": bool(iso_anomaly[i]),
+                },
+                latency_ms=0.0,
+            )
+            for i in range(n)
+        ]
+
+        # --- bookkeeping ---
+        self._samples_seen += n
+        self._poison_count += int(is_poisoned.sum())
+
+        if update_state:
+            clean_mask = ~is_poisoned
+            clean_rows = arr[clean_mask]
+            for row in clean_rows:
+                if self._welford is not None:
+                    self._welford.update(row)
+                self._window.append(row)
+            self._samples_since_refit += int(clean_mask.sum())
+            if len(self._window) > self.window_size:
+                self._window = self._window[-self.window_size:]
+            if (
+                self._samples_since_refit >= self.refit_interval
+                and len(self._window) >= 50
+            ):
+                self._refit_model()
+
+        return results
+
     def update_baseline(self, clean_samples: list[list[float]] | np.ndarray) -> None:
         """Update the baseline model with known-clean samples.
 
