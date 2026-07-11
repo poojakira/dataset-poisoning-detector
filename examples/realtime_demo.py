@@ -75,7 +75,7 @@ def run_demo(
         contamination=0.05,
         drift_sensitivity=0.01,
     )
-    drift_detector = ConceptDriftDetector(sensitivity=0.01)
+    drift_detector = ConceptDriftDetector(delta=0.01)
     fingerprinter = SampleFingerprinter(similarity_threshold=0.95)
 
     # Seed the baseline with clean data
