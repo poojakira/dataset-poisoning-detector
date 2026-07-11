@@ -235,14 +235,47 @@ class SlidingWindowRateLimiter:
 
         return self._check_memory(safe_key)
 
+    # Lua script that atomically prunes, counts, conditionally adds, and sets expiry.
+    # This eliminates the TOCTOU race between count check and ZADD that existed
+    # when these operations were split across separate pipeline calls.
+    # KEYS[1] = the sorted set key
+    # ARGV[1] = window_start (prune entries older than this)
+    # ARGV[2] = now (current timestamp, used as score for new entry)
+    # ARGV[3] = max_requests (limit)
+    # ARGV[4] = member value (unique entry identifier)
+    # ARGV[5] = expire_seconds (TTL for the key)
+    # Returns: {allowed (0/1), remaining, oldest_score or 0}
+    _LUA_SLIDING_WINDOW = """
+    redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+    local count = redis.call('ZCARD', KEYS[1])
+    local max_requests = tonumber(ARGV[3])
+    if count >= max_requests then
+        local oldest = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', '+inf', 'WITHSCORES', 'LIMIT', 0, 1)
+        local oldest_score = 0
+        if #oldest >= 2 then
+            oldest_score = tonumber(oldest[2])
+        end
+        return {0, 0, tostring(oldest_score)}
+    end
+    redis.call('ZADD', KEYS[1], ARGV[2], ARGV[4])
+    redis.call('EXPIRE', KEYS[1], tonumber(ARGV[5]))
+    local new_count = count + 1
+    local remaining = max_requests - new_count
+    return {1, remaining, "0"}
+    """
+
     def _check_redis(self, key: str) -> RateLimitResult:
         """Check rate limit using Redis sorted set.
 
-        Uses a pipeline (MULTI/EXEC) to atomically:
+        Uses a Lua script to atomically:
         1. Remove expired entries (ZREMRANGEBYSCORE)
         2. Count current entries (ZCARD)
-        3. Add new entry if allowed (ZADD)
+        3. Conditionally add new entry if under limit (ZADD)
         4. Set key expiration (EXPIRE)
+
+        The Lua script executes as a single atomic operation in Redis,
+        eliminating the TOCTOU race condition that would exist if these
+        steps were performed in separate pipeline calls.
 
         Args:
             key: Sanitized rate limit key.
@@ -253,28 +286,28 @@ class SlidingWindowRateLimiter:
         now = time.time()
         window_start = now - self._window_seconds
         redis_key = f"{self._key_prefix}:{key}"
+        member = f"{now}:{id(key)}"
+        expire_seconds = int(self._window_seconds) + 1
 
-        pipe = self._redis_client.pipeline(transaction=True)
-        pipe.zremrangebyscore(redis_key, "-inf", window_start)
-        pipe.zcard(redis_key)
-        pipe.execute()
+        result = self._redis_client.eval(
+            self._LUA_SLIDING_WINDOW,
+            1,
+            redis_key,
+            str(window_start),
+            str(now),
+            str(self._max_requests),
+            member,
+            str(expire_seconds),
+        )
 
-        # Get current count after pruning
-        pipe2 = self._redis_client.pipeline(transaction=True)
-        pipe2.zcard(redis_key)
-        results = pipe2.execute()
-        current_count = results[0]
+        allowed = int(result[0]) == 1
+        remaining = int(result[1])
+        oldest_score = float(result[2])
 
-        if current_count >= self._max_requests:
-            # Get the oldest entry to calculate retry_after
-            oldest = self._redis_client.zrangebyscore(
-                redis_key, "-inf", "+inf", start=0, num=1, withscores=True
-            )
+        if not allowed:
             retry_after = 0.0
-            if oldest:
-                oldest_time = oldest[0][1]
-                retry_after = max(0.0, (oldest_time + self._window_seconds) - now)
-
+            if oldest_score > 0:
+                retry_after = max(0.0, (oldest_score + self._window_seconds) - now)
             return RateLimitResult(
                 allowed=False,
                 remaining=0,
@@ -283,13 +316,6 @@ class SlidingWindowRateLimiter:
                 using_fallback=False,
             )
 
-        # Add this request
-        pipe3 = self._redis_client.pipeline(transaction=True)
-        pipe3.zadd(redis_key, {f"{now}:{id(key)}": now})
-        pipe3.expire(redis_key, int(self._window_seconds) + 1)
-        pipe3.execute()
-
-        remaining = self._max_requests - current_count - 1
         return RateLimitResult(
             allowed=True,
             remaining=max(0, remaining),

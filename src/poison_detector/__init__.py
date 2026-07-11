@@ -75,3 +75,33 @@ try:
 except ImportError:
     # Real-time dependencies not installed -- core API still works
     pass
+
+# Conditional imports for security modules (require [security] extras: cryptography, PyJWT, bcrypt)
+try:
+    from .auth import JWTAuthenticator, APIKeyAuthenticator, MTLSValidator
+    from .rbac import RBACEnforcer, Role, Permission
+    from .crypto import DataEncryptor, IntegrityVerifier
+    from .audit import AuditLogger
+    from .input_sanitizer import InputSanitizer
+    from .circuit_breaker import CircuitBreaker
+    from .rate_limiter import SlidingWindowRateLimiter, TokenBucketRateLimiter, CompositeRateLimiter
+
+    __all__ += [
+        "JWTAuthenticator",
+        "APIKeyAuthenticator",
+        "MTLSValidator",
+        "RBACEnforcer",
+        "Role",
+        "Permission",
+        "DataEncryptor",
+        "IntegrityVerifier",
+        "AuditLogger",
+        "InputSanitizer",
+        "CircuitBreaker",
+        "SlidingWindowRateLimiter",
+        "TokenBucketRateLimiter",
+        "CompositeRateLimiter",
+    ]
+except ImportError:
+    # Security dependencies not installed -- core API still works
+    pass

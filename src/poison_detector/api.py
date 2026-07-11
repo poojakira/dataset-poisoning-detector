@@ -234,6 +234,20 @@ class ConnectionManager:
 
 # --- Application Setup ---
 
+# NOTE: Security middleware (authentication, RBAC, rate limiting) is available via
+# the security modules (poison_detector.auth, poison_detector.rbac,
+# poison_detector.rate_limiter) and should be enabled via configuration for
+# production deployments. These modules are opt-in to allow flexible integration:
+#
+#   from poison_detector.auth import JWTAuthenticator
+#   from poison_detector.rbac import RBACEnforcer, Role, Permission
+#   from poison_detector.rate_limiter import SlidingWindowRateLimiter
+#
+# For production, add middleware that calls JWTAuthenticator.authenticate() on
+# incoming requests, enforces RBAC permissions per endpoint, and applies
+# distributed rate limiting via Redis-backed SlidingWindowRateLimiter. See
+# docs/SECURITY.md and docs/DEPLOYMENT.md for integration guidance.
+
 _start_time = time.time()
 _config = DetectorConfig()
 _detector = StreamingDetector(
