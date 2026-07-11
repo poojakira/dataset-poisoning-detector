@@ -24,8 +24,9 @@ Honest Limitations:
       IsolationForest predict is O(trees * depth) when the model exists.
       For very high-dimensional data (>10K features), consider dimensionality
       reduction before this stage.
-    - Thread-safety uses asyncio.Lock. This is cooperative concurrency only.
-      For true multi-threaded access, use threading.Lock instead.
+    - score_sample() is synchronous and not thread-safe. For multi-threaded
+      access, wrap calls with an external threading.Lock. Single-threaded
+      async event loops (the common FastAPI deployment) are safe.
 
 Security Notes:
     - Sample data is stored in memory (the rolling window). Ensure the process
@@ -38,7 +39,6 @@ Security Notes:
 
 from __future__ import annotations
 
-import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -165,8 +165,11 @@ class StreamingDetector:
                 quarantine(sample)
 
     Thread Safety:
-        Uses asyncio.Lock for coroutine-safe concurrent access. For sync usage,
-        the lock is a no-op (score_sample can be called without await).
+        score_sample() is synchronous and NOT thread-safe. If called from
+        multiple threads, wrap calls with an external threading.Lock. For
+        async usage from FastAPI, the GIL provides safety for single-threaded
+        async event loops (the common case), but concurrent async tasks
+        modifying state should serialize access externally.
     """
 
     def __init__(
@@ -207,9 +210,6 @@ class StreamingDetector:
         self._poison_count: int = 0
         self._total_latency_ms: float = 0.0
         self._drift_detected: bool = False
-
-        # Async lock for thread-safety
-        self._lock = asyncio.Lock()
 
     def _initialize_features(self, n_features: int) -> None:
         """Lazily initialize feature-count-dependent state."""
@@ -397,7 +397,8 @@ class StreamingDetector:
     def _update_state(self, sample: np.ndarray, is_poisoned: bool) -> None:
         """Update internal state with a new sample.
 
-        - Updates Welford statistics (always, to track distribution)
+        - Updates Welford statistics only for clean samples (prevents baseline
+          corruption from poisoned samples shifting z-score mean/variance)
         - Adds to rolling window if not poisoned (clean samples only)
         - Triggers IsolationForest refit when enough clean samples accumulated
 
@@ -405,12 +406,11 @@ class StreamingDetector:
             sample: The sample feature vector.
             is_poisoned: Whether this sample was flagged as poisoned.
         """
-        # Always update Welford stats for distribution tracking
-        if self._welford is not None:
-            self._welford.update(sample)
-
-        # Only add clean samples to the window (avoid poisoning the baseline)
+        # Only add clean samples to the window and Welford stats
+        # (avoid poisoning the z-score baseline with flagged samples)
         if not is_poisoned:
+            if self._welford is not None:
+                self._welford.update(sample)
             self._window.append(sample)
             self._samples_since_refit += 1
 
