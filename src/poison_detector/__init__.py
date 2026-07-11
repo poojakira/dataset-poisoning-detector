@@ -35,6 +35,17 @@ from .isolation import IsolationDetector
 from .attribution import feature_attribution
 from .report import format_report, export_json, export_csv
 
+# v1.1.0 detection methods (pure sklearn/numpy -- available with the core install)
+from .spectral import (
+    spectral_detect,
+    spectral_scores,
+    spectral_signature_scores,
+    covariance_residual_scores,
+)
+from .label_aware import label_aware_detect, label_disagreement_scores
+from .influence import influence_detect, influence_scores, loss_scores
+from .reduction import DimensionalityReducer
+
 __all__ = [
     "PoisonResult",
     "DetectionReport",
@@ -46,9 +57,20 @@ __all__ = [
     "format_report",
     "export_json",
     "export_csv",
+    # detection methods added in v1.1.0
+    "spectral_detect",
+    "spectral_scores",
+    "spectral_signature_scores",
+    "covariance_residual_scores",
+    "label_aware_detect",
+    "label_disagreement_scores",
+    "influence_detect",
+    "influence_scores",
+    "loss_scores",
+    "DimensionalityReducer",
 ]
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 # Conditional imports for real-time modules (require [realtime] extras)
 try:
