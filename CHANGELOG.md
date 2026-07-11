@@ -1,5 +1,55 @@
 # Changelog
 
+## 1.0.0 (2024-01-25)
+
+Production-ready enterprise release with comprehensive security hardening,
+infrastructure automation, and operational tooling.
+
+### Security
+- mTLS + JWT + API key authentication with key rotation
+- Role-based access control (RBAC) with 4 roles (admin, analyst, operator, viewer)
+- AES-256-GCM encryption at rest with automatic key rotation
+- Immutable, tamper-evident audit trail (SOC2-ready)
+- Input validation and sanitization (NaN/Inf/dimension/range checks)
+- Distributed sliding window rate limiting
+- Circuit breakers with per-dependency isolation
+
+### Infrastructure
+- Terraform modules for AWS deployment (EKS, RDS, Redis, S3)
+- Production Kubernetes manifests with restricted Pod Security Standards
+- Multi-AZ high availability with PodDisruptionBudgets and HPA
+- Non-root container with minimal attack surface
+- Kustomize overlays for dev/staging/prod environments
+
+### Observability
+- Prometheus metrics and alerting rules
+- Grafana dashboards for operational monitoring
+- OpenTelemetry distributed tracing integration
+- Structured logging with correlation IDs
+
+### Testing
+- Integration tests for end-to-end, failover, and load scenarios
+- Security-focused test suite for auth, crypto, and audit modules
+- 60+ tests covering all detection and enterprise modules
+
+### Documentation
+- Architecture decision records and system design docs
+- Deployment runbooks and operational procedures
+- Threat model with STRIDE analysis
+- SLA definitions and incident response procedures
+- API reference documentation
+
+### CI/CD
+- Automated security scanning with pip-audit and bandit
+- SBOM generation with CycloneDX
+- Semantic versioning release automation
+- CODEOWNERS for security-critical module review
+- Pre-commit hooks for secrets scanning and code quality
+
+### Changed
+- License changed from MIT to Apache 2.0 (enterprise-friendly)
+- Version bumped to 1.0.0 (production-ready)
+
 ## 0.2.0 (2024-01-20)
 
 ### Added

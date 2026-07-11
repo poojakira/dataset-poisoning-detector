@@ -367,6 +367,23 @@ curl http://localhost:8000/health
 open http://localhost:3000  # admin/detector
 ```
 
+## Production Readiness Checklist
+
+- [x] Authentication (mTLS + JWT + API key)
+- [x] Authorization (RBAC with 4 roles)
+- [x] Encryption (AES-256-GCM at rest, TLS in transit)
+- [x] Audit trail (immutable, tamper-evident, SOC2-ready)
+- [x] Input validation (NaN/Inf/dimension/range checks)
+- [x] Rate limiting (distributed sliding window)
+- [x] Circuit breakers (per-dependency isolation)
+- [x] Observability (Prometheus + Grafana + OTel tracing)
+- [x] Infrastructure as Code (Terraform for AWS)
+- [x] Container security (non-root, restricted PSS, minimal image)
+- [x] HA/DR (multi-AZ, PDB, HPA, graceful degradation)
+- [x] Compliance (SOC2, ISO27001 audit trail mapping)
+- [x] Documentation (architecture, runbooks, threat model, SLA)
+- [x] CI/CD (automated security scanning, SBOM, signed releases)
+
 ## License
 
-MIT
+Apache 2.0

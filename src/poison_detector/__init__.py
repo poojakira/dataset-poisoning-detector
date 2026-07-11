@@ -48,7 +48,7 @@ __all__ = [
     "export_csv",
 ]
 
-__version__ = "0.2.0"
+__version__ = "1.0.0"
 
 # Conditional imports for real-time modules (require [realtime] extras)
 try:
