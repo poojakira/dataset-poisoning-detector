@@ -34,7 +34,7 @@ realtime = [
     "pyyaml>=6.0",
 ]
 kafka = [
-    "confluent-kafka>=2.4",
+    "aiokafka>=0.10",
 ]
 
 [tool.setuptools.packages.find]
