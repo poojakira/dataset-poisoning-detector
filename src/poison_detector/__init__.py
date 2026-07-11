@@ -100,7 +100,7 @@ except ImportError:
 
 # Conditional imports for security modules (require [security] extras: cryptography, PyJWT, bcrypt)
 try:
-    from .auth import JWTAuthenticator, APIKeyAuthenticator, MTLSValidator
+    from .auth import JWTAuthenticator, APIKeyAuthenticator, MTLSValidator, TokenDenylist
     from .rbac import RBACEnforcer, Role, Permission
     from .crypto import DataEncryptor, IntegrityVerifier
     from .audit import AuditLogger
@@ -112,6 +112,7 @@ try:
         "JWTAuthenticator",
         "APIKeyAuthenticator",
         "MTLSValidator",
+        "TokenDenylist",
         "RBACEnforcer",
         "Role",
         "Permission",

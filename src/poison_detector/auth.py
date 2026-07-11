@@ -316,12 +316,89 @@ class AuthFailureRateLimiter:
 # ---------------------------------------------------------------------------
 
 
+class TokenDenylist:
+    """TTL-bounded JWT revocation list keyed by the token's ``jti`` claim.
+
+    Stateless JWT validation cannot revoke a token before it expires. This
+    denylist restores revocation: an operator calls ``revoke(jti, exp)`` (e.g.
+    on logout, credential compromise, or role change) and every subsequent
+    validation of a token carrying that ``jti`` is denied.
+
+    Entries are TTL-bounded: a revoked jti only needs to be remembered until the
+    token's own expiry, after which the signature check rejects it anyway. Expired
+    entries are pruned lazily on access so the list cannot grow without bound.
+
+    Threat Model / Limitations:
+        - In-memory and per-process. For a multi-replica deployment, back this
+          with a shared store (Redis) so a revocation on one replica is seen by
+          all. The in-memory version is correct for single-process deployments
+          and as a fast local cache in front of a shared store.
+        - Revocation only works for tokens that carry a ``jti`` claim. Tokens
+          minted without a jti cannot be individually revoked; the issuer must
+          include jti for revocation to be possible.
+
+    Security Notes:
+        - Only the opaque jti and an expiry timestamp are stored -- never the
+          token body or any secret material.
+    """
+
+    def __init__(self) -> None:
+        self._revoked: dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def revoke(self, jti: str, expires_at: float = 0.0) -> None:
+        """Revoke a token by its jti until its natural expiry.
+
+        Args:
+            jti: The token's unique identifier (``jti`` claim).
+            expires_at: Unix timestamp when the token expires. 0 means "keep the
+                revocation until explicitly cleared" (no natural expiry known).
+        """
+        if not jti:
+            raise ValueError("jti must be a non-empty string")
+        with self._lock:
+            self._revoked[jti] = expires_at
+
+    def is_revoked(self, jti: str) -> bool:
+        """Return True if the jti is currently revoked (pruning expired entries)."""
+        if not jti:
+            return False
+        now = time.time()
+        with self._lock:
+            exp = self._revoked.get(jti)
+            if exp is None:
+                return False
+            # A positive, past expiry means the token is dead anyway -> prune.
+            if exp and exp <= now:
+                del self._revoked[jti]
+                return False
+            return True
+
+    def prune(self) -> int:
+        """Remove all entries whose token has already expired. Returns count removed."""
+        now = time.time()
+        with self._lock:
+            expired = [j for j, e in self._revoked.items() if e and e <= now]
+            for j in expired:
+                del self._revoked[j]
+            return len(expired)
+
+    @property
+    def size(self) -> int:
+        with self._lock:
+            return len(self._revoked)
+
+
 class JWTAuthenticator:
     """JWT token validator using RS256 (asymmetric) signatures.
 
     Validates JWT tokens against a configured RSA public key with
     configurable issuer and audience claims. Rejects HS256 and other
     symmetric algorithms to prevent key confusion attacks.
+
+    Revocation: when constructed with a TokenDenylist, every validated token's
+    ``jti`` claim is checked against the denylist and revoked tokens are denied
+    even though their signature is still valid.
 
     Usage:
         authenticator = JWTAuthenticator(
@@ -332,6 +409,9 @@ class JWTAuthenticator:
         result = authenticator.authenticate(token)
         if result.decision == AuthDecision.ALLOWED:
             print(f"Authenticated: {result.identity}")
+
+        # Later, on logout / compromise:
+        authenticator.revoke(jti, expires_at=exp)
     """
 
     # Only allow asymmetric algorithms
@@ -345,6 +425,7 @@ class JWTAuthenticator:
         allowed_algorithms: list[str] | None = None,
         rate_limiter: AuthFailureRateLimiter | None = None,
         audit_log: AuditLog | None = None,
+        denylist: TokenDenylist | None = None,
     ) -> None:
         """Initialize the JWT authenticator.
 
@@ -355,6 +436,8 @@ class JWTAuthenticator:
             allowed_algorithms: Algorithms to accept. Defaults to RS256 only.
             rate_limiter: Optional rate limiter for auth failures.
             audit_log: Optional audit log for recording decisions.
+            denylist: Optional TokenDenylist for jti-based revocation. If None,
+                a fresh empty denylist is created so revoke() always works.
 
         Raises:
             ValueError: If public_key_pem is empty or algorithms include symmetric ones.
@@ -379,6 +462,16 @@ class JWTAuthenticator:
         self._algorithms = algorithms
         self._rate_limiter = rate_limiter
         self._audit_log = audit_log
+        self._denylist = denylist or TokenDenylist()
+
+    def revoke(self, jti: str, expires_at: float = 0.0) -> None:
+        """Revoke a token by its jti (see TokenDenylist.revoke)."""
+        self._denylist.revoke(jti, expires_at)
+
+    @property
+    def denylist(self) -> TokenDenylist:
+        """The denylist backing this authenticator's revocation checks."""
+        return self._denylist
 
     def authenticate(
         self,
@@ -432,6 +525,20 @@ class JWTAuthenticator:
             if not identity:
                 raise jwt.InvalidTokenError("Token missing 'sub' claim")
 
+            # Revocation check: a signature-valid token whose jti has been
+            # revoked must still be denied (TTL-bounded denylist).
+            jti = payload.get("jti", "")
+            if jti and self._denylist.is_revoked(jti):
+                self._log_decision(
+                    AuthDecision.DENIED, identity, client_ip, resource,
+                    "token revoked (jti on denylist)",
+                )
+                return AuthResult(
+                    decision=AuthDecision.DENIED,
+                    method=AuthMethod.JWT,
+                    error="Token has been revoked",
+                )
+
             if self._rate_limiter:
                 self._rate_limiter.record_success(client_id)
 
@@ -451,6 +558,7 @@ class JWTAuthenticator:
                     "audience": payload.get("aud", ""),
                     "expires_at": payload.get("exp", 0),
                     "issued_at": payload.get("iat", 0),
+                    "jti": payload.get("jti", ""),
                 },
             )
 
