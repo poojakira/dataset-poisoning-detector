@@ -29,10 +29,13 @@ Honest Limitations:
 
 Security Notes:
     - All inputs validated via Pydantic. No raw dict access from request bodies.
-    - API key passed via X-API-Key header, validated in middleware.
+    - Optional API-key auth: set POISON_API_KEYS (comma-separated) to require a
+      valid X-API-Key on all HTTP endpoints except /health and /metrics. When
+      unset, the service is open (network-level controls are the boundary) and
+      the header is used only for rate-limit bucketing.
     - No eval(), exec(), or dynamic code execution from request data.
-    - WebSocket connections are unauthenticated in this implementation.
-      Add token validation for production use.
+    - WebSocket /stream is NOT covered by the HTTP auth middleware and remains
+      unauthenticated; add token validation before exposing it. (Known gap.)
     - Response bodies never echo raw sample data back to prevent data leakage
       between tenants.
 """
@@ -40,6 +43,8 @@ Security Notes:
 from __future__ import annotations
 
 import asyncio
+import hmac
+import os
 import time
 import traceback
 from collections import defaultdict
@@ -247,6 +252,20 @@ _detector = StreamingDetector(
 _rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
 _ws_manager = ConnectionManager()
 
+# Optional API-key authentication. When POISON_API_KEYS (comma-separated) is
+# set, scoring/stats endpoints require a matching X-API-Key; /health and
+# /metrics stay open for probes/scrapes. When unset, the service is open and
+# X-API-Key is used only for rate-limit bucketing (backwards compatible).
+_VALID_API_KEYS: set[str] = {
+    k.strip() for k in os.environ.get("POISON_API_KEYS", "").split(",") if k.strip()
+}
+_AUTH_EXEMPT_PATHS = ("/health", "/metrics")
+
+
+def _api_key_valid(provided: str) -> bool:
+    """Constant-time check of a provided key against the configured set."""
+    return any(hmac.compare_digest(provided, k) for k in _VALID_API_KEYS)
+
 app = FastAPI(
     title="Poison Detector API",
     description="Real-time dataset poisoning detection service",
@@ -258,20 +277,30 @@ app = FastAPI(
 
 
 @app.middleware("http")
-async def rate_limit_middleware(request: Request, call_next: Any) -> Any:
-    """Apply rate limiting based on X-API-Key header.
+async def security_middleware(request: Request, call_next: Any) -> Any:
+    """Enforce optional API-key auth, then rate limiting.
 
-    Security Note:
-        The X-API-Key header is used for rate-limit bucketing only, not for
-        authentication. This is by design for an internal service where
-        network-level access control (VPC, service mesh) provides the security
-        boundary. Requests without the header are bucketed as "anonymous".
+    Auth: if POISON_API_KEYS is configured, every endpoint except /health and
+    /metrics requires a valid X-API-Key (else 401). If it is NOT configured the
+    service is open and the header is used only for rate-limit bucketing — so
+    network-level controls (VPC/service mesh) remain the boundary as before.
     """
-    # Skip rate limiting for health and metrics endpoints
-    if request.url.path in ("/health", "/stats", "/metrics"):
+    path = request.url.path
+    api_key = request.headers.get("X-API-Key", "anonymous")
+
+    # Authentication (when enabled).
+    if _VALID_API_KEYS and path not in _AUTH_EXEMPT_PATHS:
+        provided = request.headers.get("X-API-Key", "")
+        if not _api_key_valid(provided):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid or missing API key"},
+            )
+
+    # Rate limiting (skip for health/stats/metrics operational endpoints).
+    if path in ("/health", "/stats", "/metrics"):
         return await call_next(request)
 
-    api_key = request.headers.get("X-API-Key", "anonymous")
     if not _rate_limiter.is_allowed(api_key):
         return JSONResponse(
             status_code=429,
