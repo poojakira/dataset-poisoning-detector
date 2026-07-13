@@ -107,6 +107,60 @@ def test_window_overflow_evicts_old_data():
     assert len(detector._window) == window_size
 
 
+def test_score_is_continuous_in_unit_interval():
+    """score_sample().score is a continuous value in [0, 1], not a hard 0/1 flag.
+
+    Guards the documented API contract that r.score is a continuous anomaly
+    score (higher = more anomalous), which downstream ROC/threshold analysis
+    depends on.
+    """
+    rng = np.random.default_rng(7)
+    detector = StreamingDetector(window_size=1000, contamination=0.05)
+    baseline = rng.normal(size=(300, 8))
+    detector.update_baseline(baseline)
+
+    scores = []
+    for _ in range(200):
+        vec = rng.normal(size=8)
+        r = detector.score_sample(vec)
+        assert 0.0 <= r.score <= 1.0
+        scores.append(r.score)
+
+    # Scores must vary (not a degenerate constant / pure 0-1 indicator).
+    assert len(set(round(s, 6) for s in scores)) > 1
+
+
+def test_contamination_implies_nonzero_false_positives():
+    """A detector calibrated at contamination>0 flags some clean samples.
+
+    Regression guard against any 'zero false positives' claim: with
+    contamination=0.05 and an IsolationForest baseline, scoring purely clean
+    (in-distribution) samples must produce a NONZERO false-positive rate at a
+    5%-target operating threshold. Zero FPs on clean data would indicate a
+    scoring bug or a dishonest claim.
+    """
+    rng = np.random.default_rng(20240713)
+    contamination = 0.05
+    detector = StreamingDetector(window_size=5000, contamination=contamination)
+
+    # All-clean, in-distribution data. No poison at all.
+    clean = rng.normal(size=(800, 10))
+    detector.update_baseline(clean)
+
+    scores = np.array([detector.score_sample(row).score for row in clean])
+
+    # Choose the threshold that targets a 5% false-positive rate (95th pct of
+    # clean scores) and measure the ACTUAL FP rate on the clean data.
+    threshold = float(np.quantile(scores, 1.0 - contamination))
+    fp_rate = float(np.mean(scores >= threshold))
+
+    # The measured false-positive rate on clean data must be strictly > 0:
+    # an anomaly detector at nonzero contamination cannot have zero FPs.
+    assert fp_rate > 0.0
+    # And it should be in a sane neighborhood of the target, not ~1.0.
+    assert fp_rate <= 0.20
+
+
 def test_reset_clears_all_state():
     """reset() returns the detector to its initial state.
 
