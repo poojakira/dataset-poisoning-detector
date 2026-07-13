@@ -41,10 +41,11 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any
 
 import numpy as np
 from sklearn.ensemble import IsolationForest
+
+from .drift import ConceptDriftDetector
 
 
 @dataclass
@@ -205,6 +206,14 @@ class StreamingDetector:
         self._samples_since_refit: int = 0
         self._n_features: int | None = None
 
+        # Concept drift detector. Runs one ADWIN instance per feature plus a
+        # global Page-Hinkley test. Auto-initializes to the sample width on the
+        # first update. Wired into score_sample so get_stats().drift_detected
+        # reflects the real drift state rather than a hardcoded False.
+        self._drift_detector: ConceptDriftDetector = ConceptDriftDetector(
+            delta=drift_sensitivity
+        )
+
         # Stats tracking
         self._samples_seen: int = 0
         self._poison_count: int = 0
@@ -257,9 +266,8 @@ class StreamingDetector:
         # --- IsolationForest based detection ---
         iso_anomaly = False
         if self._model is not None:
-            raw_score = self._model.score_samples(sample_arr.reshape(1, -1))[0]
-            # sklearn: lower score = more anomalous, threshold at 0
-            # Normalize: decision_function gives offset from threshold
+            # sklearn: lower score = more anomalous, threshold at 0.
+            # decision_function gives the offset from that threshold.
             decision = self._model.decision_function(sample_arr.reshape(1, -1))[0]
             iso_anomaly = decision < 0
             # Convert to 0-1 scale (approximate)
@@ -276,6 +284,13 @@ class StreamingDetector:
         # Vote-based decision
         votes_for_poison = sum(1 for v in method_votes.values() if v)
         is_poisoned = votes_for_poison >= self.vote_threshold
+
+        # Update concept-drift detection with the raw (unfiltered) sample.
+        # Drift tracks the distribution of *all* incoming data, including
+        # samples that were flagged, because a coordinated campaign shows up
+        # as distribution shift regardless of per-sample flagging.
+        self._drift_detector.update(sample_arr.tolist())
+        self._drift_detected = self._drift_detector.is_drifting()
 
         # Update rolling window and statistics
         self._update_state(sample_arr, is_poisoned)
@@ -393,6 +408,7 @@ class StreamingDetector:
         self._poison_count = 0
         self._total_latency_ms = 0.0
         self._drift_detected = False
+        self._drift_detector = ConceptDriftDetector(delta=self.drift_sensitivity)
 
     def _update_state(self, sample: np.ndarray, is_poisoned: bool) -> None:
         """Update internal state with a new sample.
@@ -436,3 +452,13 @@ class StreamingDetector:
         )
         self._model.fit(window_arr)
         self._samples_since_refit = 0
+
+        # Recompute the z-score baseline from the current window so it reflects
+        # only the retained (rolling) samples. Without this, the Welford
+        # accumulator keeps every clean sample ever seen and its mean/variance
+        # never "forget" evicted data, defeating the rolling-window design and
+        # preventing the statistical baseline from adapting to legitimate drift.
+        if self._n_features is not None:
+            self._welford = WelfordAccumulator(self._n_features)
+            for row in window_arr:
+                self._welford.update(row)

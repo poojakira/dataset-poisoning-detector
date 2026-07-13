@@ -39,11 +39,8 @@ Security Notes:
 
 from __future__ import annotations
 
-import asyncio
 import time
-import traceback
 from collections import defaultdict
-from dataclasses import asdict
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
@@ -156,15 +153,24 @@ class RateLimiter:
     Not suitable for multi-process deployments without external state.
     """
 
-    def __init__(self, max_requests: int = 100, window_seconds: int = 60) -> None:
+    def __init__(
+        self,
+        max_requests: int = 100,
+        window_seconds: int = 60,
+        max_tracked_keys: int = 10000,
+    ) -> None:
         """Initialize rate limiter.
 
         Args:
             max_requests: Maximum requests per window per API key.
             window_seconds: Window size in seconds.
+            max_tracked_keys: Upper bound on the number of distinct API keys
+                tracked at once. Prevents unbounded memory growth (a DoS vector)
+                when an attacker rotates the X-API-Key header on every request.
         """
         self._max_requests = max_requests
         self._window_seconds = window_seconds
+        self._max_tracked_keys = max_tracked_keys
         self._requests: dict[str, list[float]] = defaultdict(list)
 
     def is_allowed(self, api_key: str) -> bool:
@@ -179,16 +185,52 @@ class RateLimiter:
         now = time.time()
         window_start = now - self._window_seconds
 
-        # Clean old entries
-        self._requests[api_key] = [
-            t for t in self._requests[api_key] if t > window_start
-        ]
+        # Clean old entries for this key.
+        recent = [t for t in self._requests[api_key] if t > window_start]
 
-        if len(self._requests[api_key]) >= self._max_requests:
+        if len(recent) >= self._max_requests:
+            self._requests[api_key] = recent
             return False
 
-        self._requests[api_key].append(now)
+        recent.append(now)
+        self._requests[api_key] = recent
+
+        # Bound memory: without this, every distinct api_key leaves a permanent
+        # dict entry, so an attacker sending a unique X-API-Key per request can
+        # exhaust memory. Enforce a hard cap on tracked keys.
+        if len(self._requests) > self._max_tracked_keys:
+            self._enforce_capacity(window_start)
+
         return True
+
+    def _enforce_capacity(self, window_start: float) -> None:
+        """Keep the number of tracked keys within max_tracked_keys.
+
+        First drops keys whose most recent request has aged out of the window
+        (cheap and always correct). If that is not enough -- e.g. an attacker
+        rotates the X-API-Key on every request faster than the window elapses --
+        evict the least-recently-seen keys until back under the cap. Evicting a
+        live key merely resets its counter, which is an acceptable degradation
+        under a flood; unbounded memory growth is not.
+        """
+        # Pass 1: drop stale keys.
+        stale = [
+            key
+            for key, timestamps in self._requests.items()
+            if not timestamps or timestamps[-1] <= window_start
+        ]
+        for key in stale:
+            del self._requests[key]
+
+        # Pass 2: if still over the cap, evict the oldest-seen keys.
+        overflow = len(self._requests) - self._max_tracked_keys
+        if overflow > 0:
+            by_last_seen = sorted(
+                self._requests.items(),
+                key=lambda item: item[1][-1] if item[1] else 0.0,
+            )
+            for key, _ in by_last_seen[:overflow]:
+                del self._requests[key]
 
 
 # --- WebSocket Manager ---

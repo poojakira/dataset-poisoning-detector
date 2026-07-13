@@ -105,8 +105,6 @@ def detect(X: list[list[float]], method: str = "ensemble") -> DetectionReport:
     if method not in valid_methods:
         raise ValueError(f"Unknown method '{method}'. Must be one of {valid_methods}")
 
-    n_samples = len(X)
-
     if method == "ensemble":
         return _ensemble_detect(X)
 

@@ -46,8 +46,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -203,16 +202,23 @@ class SampleFingerprinter:
         bloom_error_rate: float = 0.01,
         max_reference_size: int = 5000,
         hash_precision: int = 4,
+        lsh_bits: int = 32,
     ) -> None:
         self.similarity_threshold = similarity_threshold
         self.max_reference_size = max_reference_size
         self.hash_precision = hash_precision
+        self.lsh_bits = lsh_bits
 
         self._bloom = BloomFilter(
             capacity=bloom_capacity, error_rate=bloom_error_rate
         )
         self._reference_set: list[np.ndarray] = []
         self._reference_norms: list[float] = []
+
+        # Cache of random hyperplane projection matrices, keyed by feature
+        # dimensionality. Generated deterministically so the same sample always
+        # hashes to the same bits across calls (and process restarts).
+        self._lsh_planes: dict[int, np.ndarray] = {}
 
         # Stats
         self._samples_seen: int = 0
@@ -228,19 +234,44 @@ class SampleFingerprinter:
         quantized = np.round(sample, decimals=self.hash_precision)
         return quantized.tobytes()
 
-    def _perceptual_hash(self, sample: np.ndarray) -> bytes:
-        """Compute a perceptual hash via locality-sensitive hashing.
+    def _get_lsh_planes(self, n_features: int) -> np.ndarray:
+        """Return (and cache) the random hyperplanes for a given dimensionality.
 
-        Uses random hyperplane LSH: the hash bit i is 1 if the dot product
-        of the sample with random vector i is positive. Samples close in
-        cosine space have similar hashes.
-
-        For simplicity and determinism, we use a fixed seed for the random
-        projections based on the feature dimensionality.
+        Projections are drawn from a fixed-seed generator so hashing is
+        deterministic: the same vector always maps to the same bits.
         """
-        # Simple perceptual hash: sign of features relative to mean
-        centered = sample - np.mean(sample)
-        bits = (centered > 0).astype(np.uint8)
+        planes = self._lsh_planes.get(n_features)
+        if planes is None:
+            # Seed depends only on dimensionality -> reproducible across runs.
+            rng = np.random.default_rng(0x5EED + n_features)
+            planes = rng.standard_normal((self.lsh_bits, n_features))
+            self._lsh_planes[n_features] = planes
+        return planes
+
+    def _perceptual_hash(self, sample: np.ndarray) -> bytes:
+        """Compute a perceptual hash via random-hyperplane LSH (SimHash).
+
+        Hash bit i is 1 iff the dot product of the sample with random hyperplane
+        i is positive. The probability that two vectors share a given bit is
+        1 - theta/pi, where theta is their angle -- so vectors that are close in
+        cosine space collide with high probability, while unrelated vectors
+        agree on each bit only ~50% of the time and match on all `lsh_bits` bits
+        with probability ~2^-lsh_bits.
+
+        The previous implementation hashed only the sign of each feature
+        relative to the sample's own mean, which produced very few distinct
+        codes (e.g. a handful of bytes for low-dimensional data). Unrelated
+        samples collided constantly, and since these codes share the bloom
+        filter with exact-duplicate hashes, that flooded `is_duplicate()` with
+        false positives. Real hyperplane LSH keyed to cosine similarity fixes
+        that.
+        """
+        n_features = int(sample.shape[0]) if sample.ndim else 1
+        if n_features == 0:
+            return b""
+        planes = self._get_lsh_planes(n_features)
+        projections = planes @ sample
+        bits = (projections > 0).astype(np.uint8)
         return bits.tobytes()
 
     def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:

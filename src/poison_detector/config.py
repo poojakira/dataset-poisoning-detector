@@ -29,10 +29,12 @@ Security Notes:
 
 from __future__ import annotations
 
+import logging
 import os
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 try:
     import yaml
@@ -52,7 +54,7 @@ class DetectionThresholds(BaseSettings):
     Lower thresholds catch more attacks but produce more false positives.
     """
 
-    model_config = {"env_prefix": "POISON_THRESHOLD_"}
+    model_config = {"env_prefix": "POISON_THRESHOLD_", "validate_assignment": True}
 
     zscore_threshold: float = Field(
         default=3.0,
@@ -79,7 +81,7 @@ class DetectionThresholds(BaseSettings):
 class StreamingConfig(BaseSettings):
     """Configuration for the streaming detector component."""
 
-    model_config = {"env_prefix": "POISON_STREAM_"}
+    model_config = {"env_prefix": "POISON_STREAM_", "validate_assignment": True}
 
     window_size: int = Field(
         default=10000,
@@ -105,7 +107,7 @@ class FeatureFlags(BaseSettings):
     Use these as kill switches when a method is misbehaving in production.
     """
 
-    model_config = {"env_prefix": "POISON_FLAG_"}
+    model_config = {"env_prefix": "POISON_FLAG_", "validate_assignment": True}
 
     enable_zscore: bool = Field(default=True, description="Enable z-score detection")
     enable_iqr: bool = Field(default=True, description="Enable IQR detection")
@@ -126,7 +128,7 @@ class FeatureFlags(BaseSettings):
 class AlertConfig(BaseSettings):
     """Alert dispatch configuration."""
 
-    model_config = {"env_prefix": "POISON_ALERT_"}
+    model_config = {"env_prefix": "POISON_ALERT_", "validate_assignment": True}
 
     slack_webhook_url: str = Field(default="", description="Slack webhook URL")
     pagerduty_routing_key: str = Field(
@@ -157,7 +159,7 @@ class DetectorConfig(BaseSettings):
         config = DetectorConfig.from_yaml("config/realtime.yaml")
     """
 
-    model_config = {"env_prefix": "POISON_"}
+    model_config = {"env_prefix": "POISON_", "validate_assignment": True}
 
     environment: str = Field(
         default="dev",
@@ -183,39 +185,53 @@ class DetectorConfig(BaseSettings):
 
     def _apply_yaml_overrides(self, data: dict[str, Any]) -> None:
         """Apply YAML values as defaults (env vars still take precedence)."""
-        if "thresholds" in data and isinstance(data["thresholds"], dict):
-            for key, value in data["thresholds"].items():
-                if hasattr(self.thresholds, key):
-                    # Only set if env var was not explicitly set
-                    env_key = f"POISON_THRESHOLD_{key.upper()}"
-                    if env_key not in os.environ:
-                        object.__setattr__(self.thresholds, key, value)
+        self._merge_section("thresholds", self.thresholds, data.get("thresholds"), "POISON_THRESHOLD_")
+        self._merge_section("streaming", self.streaming, data.get("streaming"), "POISON_STREAM_")
+        self._merge_section("features", self.features, data.get("features"), "POISON_FLAG_")
+        self._merge_section("alerts", self.alerts, data.get("alerts"), "POISON_ALERT_")
 
-        if "streaming" in data and isinstance(data["streaming"], dict):
-            for key, value in data["streaming"].items():
-                if hasattr(self.streaming, key):
-                    env_key = f"POISON_STREAM_{key.upper()}"
-                    if env_key not in os.environ:
-                        object.__setattr__(self.streaming, key, value)
+        if "environment" in data and "POISON_ENVIRONMENT" not in os.environ:
+            setattr(self, "environment", data["environment"])
 
-        if "features" in data and isinstance(data["features"], dict):
-            for key, value in data["features"].items():
-                if hasattr(self.features, key):
-                    env_key = f"POISON_FLAG_{key.upper()}"
-                    if env_key not in os.environ:
-                        object.__setattr__(self.features, key, value)
+    def _merge_section(
+        self,
+        section_name: str,
+        target: BaseSettings,
+        section: Any,
+        env_prefix: str,
+    ) -> None:
+        """Merge one YAML section onto a sub-config.
 
-        if "alerts" in data and isinstance(data["alerts"], dict):
-            for key, value in data["alerts"].items():
-                if hasattr(self.alerts, key):
-                    env_key = f"POISON_ALERT_{key.upper()}"
-                    if env_key not in os.environ:
-                        object.__setattr__(self.alerts, key, value)
+        Env vars still win over YAML. Unknown keys are logged as warnings
+        instead of being silently dropped (a common source of misconfiguration
+        where a typo'd key leaves detection running on unexpected defaults).
+        Values go through normal assignment so Pydantic validates/coerces them
+        (``validate_assignment`` is enabled on the models) -- unlike the old
+        ``object.__setattr__`` path, which bypassed validation entirely and
+        could leave e.g. a string where a float was required.
+        """
+        if section is None:
+            return
+        if not isinstance(section, dict):
+            _logger.warning(
+                "Config section '%s' should be a mapping, got %s; ignoring.",
+                section_name,
+                type(section).__name__,
+            )
+            return
 
-        if "environment" in data:
-            env_key = "POISON_ENVIRONMENT"
-            if env_key not in os.environ:
-                object.__setattr__(self, "environment", data["environment"])
+        for key, value in section.items():
+            if not hasattr(target, key):
+                _logger.warning(
+                    "Ignoring unknown config key '%s.%s' (not a recognized setting).",
+                    section_name,
+                    key,
+                )
+                continue
+            env_key = f"{env_prefix}{key.upper()}"
+            if env_key in os.environ:
+                continue
+            setattr(target, key, value)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> DetectorConfig:
