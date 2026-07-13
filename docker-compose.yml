@@ -27,7 +27,12 @@ services:
       - "8000:8000"
     environment:
       - POISON_ENVIRONMENT=production
+      # Detection data (training samples, feature vectors) must not cross the
+      # network in plaintext. For anything beyond a single-host demo, terminate
+      # Redis with TLS and use a rediss:// URL, or set POISON_REDIS_USE_SSL=1.
+      # e.g. - POISON_REDIS_URL=rediss://redis:6379/0
       - POISON_REDIS_URL=redis://redis:6379/0
+      - POISON_REDIS_USE_SSL=0  # set to 1 (and use rediss://) to require TLS
       - POISON_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - POISON_LOG_LEVEL=info
     depends_on:

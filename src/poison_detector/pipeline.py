@@ -45,13 +45,25 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
+
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", ""}
+
+
+def _redis_host_is_local(redis_url: str) -> bool:
+    """True if the Redis URL points at loopback (plaintext is acceptable there)."""
+    try:
+        return (urlparse(redis_url).hostname or "") in _LOCAL_HOSTS
+    except Exception:
+        return False
 
 
 class ProcessingMode(Enum):
@@ -321,11 +333,14 @@ class RedisConsumer(PipelineConsumer):
         quarantine_stream: str = "samples:quarantine",
         backpressure_threshold: int = 10000,
         backpressure_recovery: int = 5000,
+        use_ssl: bool | None = None,
     ) -> None:
         """Initialize Redis Streams consumer.
 
         Args:
-            redis_url: Redis connection URL.
+            redis_url: Redis connection URL. Use ``rediss://`` for TLS.
+            use_ssl: Force TLS. Defaults to the POISON_REDIS_USE_SSL env var
+                (truthy) so deployments can require encryption in transit.
             stream: Stream name to consume from.
             group: Consumer group name.
             consumer_name: Unique name for this consumer within the group.
@@ -335,6 +350,13 @@ class RedisConsumer(PipelineConsumer):
             backpressure_recovery: Queue depth for backpressure recovery.
         """
         super().__init__(backpressure_threshold, backpressure_recovery)
+        if use_ssl is None:
+            use_ssl = os.environ.get("POISON_REDIS_USE_SSL", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+        self._use_ssl = use_ssl
         self._redis_url = redis_url
         self._stream = stream
         self._group = group
@@ -360,10 +382,28 @@ class RedisConsumer(PipelineConsumer):
                 "Install with: pip install redis"
             )
 
-        try:
-            self._client = aioredis.from_url(
-                self._redis_url, decode_responses=True
+        # Resolve TLS. Detection data (training samples, feature vectors,
+        # quarantine payloads) must not traverse the network in plaintext.
+        url = self._redis_url
+        ssl_requested = self._use_ssl or url.startswith("rediss://")
+        if ssl_requested and url.startswith("redis://"):
+            url = "rediss://" + url[len("redis://"):]
+
+        if not ssl_requested and not _redis_host_is_local(url):
+            msg = (
+                "Connecting to a non-local Redis over plaintext 'redis://' "
+                "exposes training samples and feature vectors in transit. Use "
+                "'rediss://' or set POISON_REDIS_USE_SSL=1."
             )
+            if os.environ.get("POISON_ENV", "").lower() == "production":
+                raise ConnectionError(
+                    "Refusing plaintext Redis connection to a remote host in "
+                    "production. " + msg
+                )
+            logger.warning(msg)
+
+        try:
+            self._client = aioredis.from_url(url, decode_responses=True)
             # Create consumer group (ignore error if already exists)
             try:
                 await self._client.xgroup_create(
@@ -374,7 +414,7 @@ class RedisConsumer(PipelineConsumer):
                 pass
             self._running = True
             logger.info(
-                f"Connected to Redis at {self._redis_url}, "
+                f"Connected to Redis at {url} (tls={ssl_requested}), "
                 f"stream={self._stream}, group={self._group}"
             )
         except Exception as e:

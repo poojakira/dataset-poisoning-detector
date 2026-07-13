@@ -3,8 +3,24 @@
 Found 847 mislabeled samples in a production training set using this. The model had been
 slowly degrading for weeks -- turns out someone upstream was injecting garbage labels into
 the data pipeline. Three different detection methods independently flagged the same cluster
-of suspicious samples, and ensemble voting confirmed them with zero false positives on
-manual review.
+of suspicious samples, and ensemble voting agreed on them.
+
+> **On accuracy claims.** The result above is a single incident on one dataset, not a
+> general guarantee. Anomaly detectors like Isolation Forest have a non-trivial
+> false-positive rate on real high-dimensional data (often several percent), so we do
+> **not** claim "zero false positives" as a property. Evaluate on your own labeled data
+> and report a full **ROC curve / AUC** rather than a single operating point:
+>
+> ```python
+> from sklearn.metrics import roc_auc_score, roc_curve
+> scores = [r.anomaly_score for r in report.per_sample]
+> auc = roc_auc_score(y_true, scores)          # y_true: 1 = poisoned, 0 = clean
+> fpr, tpr, thresholds = roc_curve(y_true, scores)
+> ```
+>
+> Ensemble voting *reduces* false positives versus any single method (a sample must look
+> anomalous in multiple ways) but does not eliminate them; pick the operating threshold
+> from the ROC curve for your tolerated FPR.
 
 ## Quick Start
 
