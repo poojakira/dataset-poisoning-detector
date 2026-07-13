@@ -2,7 +2,15 @@
 
 Verifies health endpoint, single-sample scoring, batch scoring, and
 WebSocket streaming using the FastAPI TestClient.
+
+Skipped automatically when the optional FastAPI stack is not installed
+(FastAPI is an optional/`realtime` dependency, not part of `[dev]`).
 """
+
+import pytest
+
+pytest.importorskip("fastapi", reason="FastAPI optional dependency not installed")
+pytest.importorskip("httpx", reason="httpx (TestClient dependency) not installed")
 
 from fastapi.testclient import TestClient
 
