@@ -1,10 +1,20 @@
 # Dataset Poisoning Detector
 
-Found 847 mislabeled samples in a production training set using this. The model had been
-slowly degrading for weeks -- turns out someone upstream was injecting garbage labels into
-the data pipeline. Three different detection methods independently flagged the same cluster
-of suspicious samples, and ensemble voting confirmed them with zero false positives on
+Found hundreds of mislabeled samples in a production training set using this. The model had
+been slowly degrading for weeks -- turns out someone upstream was injecting garbage labels
+into the data pipeline. Three different detection methods independently flagged an
+overlapping cluster of suspicious samples, and ensemble voting narrowed the candidates for
 manual review.
+
+> **Honesty note on false positives.** This detector does **not** achieve "zero false
+> positives," and no anomaly detector operating at a nonzero contamination rate can. On a
+> real CIFAR-10 label-flip benchmark (standardized pixels -> PCA-50, per-class
+> `StreamingDetector`, `contamination=0.05`), the operating point calibrated to a 5% target
+> false-positive rate yields a **measured false-positive rate of roughly 5%** on clean
+> samples, with ROC-AUC only modestly above chance (~0.53-0.56 across flip rates of
+> 0.05/0.10/0.25). See `scripts/eval_detector.py` and the generated `RESULTS.md` for the
+> exact numbers and provenance. Any claim of zero false positives should be treated as a
+> reporting error, not a property of the method.
 
 ## Quick Start
 
