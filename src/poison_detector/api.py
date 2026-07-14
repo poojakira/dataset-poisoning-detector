@@ -29,10 +29,9 @@ Honest Limitations:
 
 Security Notes:
     - All inputs validated via Pydantic. No raw dict access from request bodies.
-    - API key passed via X-API-Key header, validated in middleware.
+    - API key passed via X-API-Key header. Set POISON_DETECTOR_API_KEY for protected scoring endpoints, or set POISON_DETECTOR_ALLOW_ANONYMOUS=true only for local development.
     - No eval(), exec(), or dynamic code execution from request data.
-    - WebSocket connections are unauthenticated in this implementation.
-      Add token validation for production use.
+    - WebSocket connections require the same API key via x-api-key header or api_key query parameter.
     - Response bodies never echo raw sample data back to prevent data leakage
       between tenants.
 """
@@ -40,9 +39,11 @@ Security Notes:
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 import traceback
 from collections import defaultdict
+from secrets import compare_digest
 from dataclasses import asdict
 from typing import Any
 
@@ -75,6 +76,7 @@ class SampleRequest(BaseModel):
     )
     metadata: dict[str, Any] = Field(
         default_factory=dict,
+        max_length=128,
         description="Optional metadata to attach to the scoring result",
     )
 
@@ -110,6 +112,8 @@ class BatchRequest(BaseModel):
         for i, sample in enumerate(v):
             if len(sample) < 1:
                 raise ValueError(f"Sample at index {i} must have at least 1 feature")
+            if len(sample) > 100000:
+                raise ValueError(f"Sample at index {i} exceeds 100000 features")
         return v
 
 
@@ -245,6 +249,25 @@ _detector = StreamingDetector(
     vote_threshold=_config.thresholds.ensemble_vote_threshold,
 )
 _rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
+_PUBLIC_PATHS = {"/health", "/stats", "/metrics"}
+_PROTECTED_PATHS = {"/score", "/batch"}
+
+
+def _allow_anonymous() -> bool:
+    return os.environ.get("POISON_DETECTOR_ALLOW_ANONYMOUS", "").lower() in {"1", "true", "yes"}
+
+
+def _configured_api_key() -> str:
+    return os.environ.get("POISON_DETECTOR_API_KEY", "")
+
+
+def _authorized_api_key(provided: str | None) -> bool:
+    expected = _configured_api_key()
+    if not expected:
+        return _allow_anonymous()
+    return provided is not None and compare_digest(provided, expected)
+
+
 _ws_manager = ConnectionManager()
 
 app = FastAPI(
@@ -259,19 +282,22 @@ app = FastAPI(
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next: Any) -> Any:
-    """Apply rate limiting based on X-API-Key header.
-
-    Security Note:
-        The X-API-Key header is used for rate-limit bucketing only, not for
-        authentication. This is by design for an internal service where
-        network-level access control (VPC, service mesh) provides the security
-        boundary. Requests without the header are bucketed as "anonymous".
-    """
-    # Skip rate limiting for health and metrics endpoints
-    if request.url.path in ("/health", "/stats", "/metrics"):
+    ## Authenticate protected endpoints, then rate limit by API key bucket.
+    path = request.url.path
+    if path in _PUBLIC_PATHS:
         return await call_next(request)
 
-    api_key = request.headers.get("X-API-Key", "anonymous")
+    provided_key = request.headers.get("X-API-Key")
+    if path in _PROTECTED_PATHS and not _authorized_api_key(provided_key):
+        status_code = 503 if not _configured_api_key() and not _allow_anonymous() else 401
+        detail = (
+            "POISON_DETECTOR_API_KEY is not configured."
+            if status_code == 503
+            else "Invalid or missing API key."
+        )
+        return JSONResponse(status_code=status_code, content={"detail": detail})
+
+    api_key = provided_key or "anonymous"
     if not _rate_limiter.is_allowed(api_key):
         return JSONResponse(
             status_code=429,
@@ -432,15 +458,14 @@ async def prometheus_metrics() -> PlainTextResponse:
 
 @app.websocket("/stream")
 async def websocket_stream(websocket: WebSocket) -> None:
-    """WebSocket endpoint for real-time detection event streaming.
+    ## WebSocket endpoint for real-time detection event streaming.
+    ## Prefer x-api-key header authentication. The api_key query parameter is
+    ## accepted for browser clients, but URLs can leak through logs/history.
+    provided_key = websocket.headers.get("x-api-key") or websocket.query_params.get("api_key")
+    if not _authorized_api_key(provided_key):
+        await websocket.close(code=1008, reason="Invalid or missing API key")
+        return
 
-    Clients connect and receive JSON messages for every detection event.
-    Useful for real-time dashboards and monitoring UIs.
-
-    Message format:
-        {"event": "poison_detected", "score": 0.85, "method_votes": {...}}
-        {"event": "batch_scored", "total_samples": 100, "poisoned_count": 5}
-    """
     await _ws_manager.connect(websocket)
     try:
         while True:
