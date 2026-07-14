@@ -1,10 +1,9 @@
 # Dataset Poisoning Detector
 
-Found hundreds of mislabeled samples in a production training set using this. The model had
-been slowly degrading for weeks -- turns out someone upstream was injecting garbage labels
-into the data pipeline. Three different detection methods independently flagged an
-overlapping cluster of suspicious samples, and ensemble voting narrowed the candidates for
-manual review.
+This project provides dataset-poisoning and anomalous-sample detection experiments for
+training-data review. It is intended to surface suspicious samples for manual review, not
+to prove that poisoning occurred in a specific production incident without external case
+evidence.
 
 > **Honesty note on false positives.** This detector does **not** achieve "zero false
 > positives," and no anomaly detector operating at a nonzero contamination rate can. On a
@@ -90,8 +89,9 @@ attr = feature_attribution(X_train, flagged_indices)
 
 ## Real-Time Detection
 
-v0.2.0 adds streaming detection for production data pipelines. Samples are scored as
-they arrive -- no batch accumulation, no reprocessing, sub-millisecond per-sample latency.
+v0.2.0 adds streaming detection for data pipelines. Samples are scored as they arrive,
+without full-batch reprocessing. Latency depends on feature dimensionality, baseline size,
+hardware, and optional components.
 
 ```python
 from poison_detector import StreamingDetector, ConceptDriftDetector, SampleFingerprinter
@@ -151,8 +151,8 @@ for sample in data_stream:
 When customers upload training data for fine-tuning, each sample passes through the
 streaming detector before entering the training queue. Catches attempts to inject
 adversarial instructions, embed backdoor triggers, or poison RLHF reward signals.
-At OpenAI's scale (millions of fine-tuning samples/day), the O(1) per-sample cost
-matters -- you cannot afford to re-scan the entire dataset on every new upload.
+At large fine-tuning scale, bounded per-sample scoring cost matters because rescanning
+the entire dataset on every new upload may be operationally expensive.
 
 ```python
 # Integration point: between upload validation and training queue
@@ -221,10 +221,10 @@ def process_training_batch(s3_input_path, s3_output_path, s3_quarantine_path):
 
 **NVIDIA - NeMo Training Data Curation**
 
-Integrates with NeMo Curator for large-scale training data filtering. The streaming
-detector handles the throughput requirements of multi-billion-token datasets, while
-the fingerprinter catches duplication attacks that would bias the training distribution.
-Drift detection identifies when data source quality degrades over time.
+Could be adapted as a NeMo Curator-style filtering stage for large-scale training data
+review. Throughput for multi-billion-token datasets has not been established here and
+would need separate benchmark evidence. The fingerprinter can flag likely duplicates,
+and drift detection can identify distribution shifts for review.
 
 ```python
 # NeMo Curator pipeline stage
@@ -365,9 +365,13 @@ pytest tests/ -v
 # Start the full stack (API + Redis + Kafka + Prometheus + Grafana)
 docker compose up -d
 
+# Configure an API key before exposing scoring endpoints
+export POISON_DETECTOR_API_KEY="replace-with-a-random-secret"
+
 # Score a sample via the API
 curl -X POST http://localhost:8000/score \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: ${POISON_DETECTOR_API_KEY}" \
   -d '{"features": [0.1, 0.2, 0.3, 0.4, 0.5]}'
 
 # Check health
