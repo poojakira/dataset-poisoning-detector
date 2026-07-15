@@ -50,6 +50,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
-# Run with uvicorn -- production settings
+## Run one worker because detector and rate-limit state are in-memory.
 ENTRYPOINT ["python", "-m", "uvicorn"]
-CMD ["poison_detector.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--access-log"]
+CMD ["poison_detector.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

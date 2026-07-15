@@ -29,9 +29,9 @@ Honest Limitations:
 
 Security Notes:
     - All inputs validated via Pydantic. No raw dict access from request bodies.
-    - API key passed via X-API-Key header. Set POISON_DETECTOR_API_KEY for protected scoring endpoints, or set POISON_DETECTOR_ALLOW_ANONYMOUS=true only for local development.
+    - API key passed via X-API-Key header. Set POISON_DETECTOR_API_KEY for protected scoring, stats, and metrics endpoints, or set POISON_DETECTOR_ALLOW_ANONYMOUS=true only for local development.
     - No eval(), exec(), or dynamic code execution from request data.
-    - WebSocket connections require the same API key via x-api-key header or api_key query parameter.
+    - WebSocket connections require the same API key via x-api-key header.
     - Response bodies never echo raw sample data back to prevent data leakage
       between tenants.
 """
@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import os
 import time
+import math
 from collections import defaultdict
 from secrets import compare_digest
 from typing import Any
@@ -57,6 +58,13 @@ from .config import DetectorConfig
 MAX_FEATURES_PER_SAMPLE = 10000
 MAX_BATCH_SAMPLES = 128
 MAX_BATCH_TOTAL_FEATURES = 50000
+
+
+def _validate_feature_vector(features: list[float], label: str) -> list[float]:
+    for i, value in enumerate(features):
+        if not math.isfinite(value):
+            raise ValueError(f"{label}[{i}] must be finite")
+    return features
 
 
 # --- Pydantic Request/Response Models ---
@@ -81,6 +89,11 @@ class SampleRequest(BaseModel):
         max_length=128,
         description="Optional metadata to attach to the scoring result",
     )
+
+    @field_validator("features")
+    @classmethod
+    def validate_features(cls, v: list[float]) -> list[float]:
+        return _validate_feature_vector(v, "features")
 
 
 class ScoringResponse(BaseModel):
@@ -113,6 +126,7 @@ class BatchRequest(BaseModel):
     @classmethod
     def validate_samples(cls, v: list[list[float]]) -> list[list[float]]:
         """Ensure all samples have at least one feature and stay within bounded work."""
+        expected_features = len(v[0])
         for i, sample in enumerate(v):
             if len(sample) < 1:
                 raise ValueError(f"Sample at index {i} must have at least 1 feature")
@@ -120,6 +134,11 @@ class BatchRequest(BaseModel):
                 raise ValueError(
                     f"Sample at index {i} exceeds {MAX_FEATURES_PER_SAMPLE} features"
                 )
+            if len(sample) != expected_features:
+                raise ValueError(
+                    f"Sample at index {i} has {len(sample)} features; expected {expected_features}"
+                )
+            _validate_feature_vector(sample, f"samples[{i}]")
         total_features = sum(len(sample) for sample in v)
         if total_features > MAX_BATCH_TOTAL_FEATURES:
             raise ValueError(f"Batch exceeds {MAX_BATCH_TOTAL_FEATURES} total features")
@@ -260,8 +279,8 @@ _detector = StreamingDetector(
     vote_threshold=_config.thresholds.ensemble_vote_threshold,
 )
 _rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
-_PUBLIC_PATHS = {"/health", "/stats", "/metrics"}
-_PROTECTED_PATHS = {"/score", "/batch"}
+_PUBLIC_PATHS = {"/health"}
+_PROTECTED_PATHS = {"/score", "/batch", "/stats", "/metrics"}
 
 
 def _allow_anonymous() -> bool:
@@ -335,6 +354,8 @@ async def score_sample(request: SampleRequest) -> ScoringResponse:
     """
     try:
         result: ScoringResult = _detector.score_sample(request.features)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -377,6 +398,8 @@ async def score_batch(request: BatchRequest) -> BatchResponse:
 
     try:
         for sample in request.samples:
+            _detector.validate_sample(sample)
+        for sample in request.samples:
             result = _detector.score_sample(sample)
             results.append(
                 ScoringResponse(
@@ -388,6 +411,8 @@ async def score_batch(request: BatchRequest) -> BatchResponse:
             )
             if result.is_poisoned:
                 poisoned_count += 1
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -482,11 +507,8 @@ async def prometheus_metrics() -> PlainTextResponse:
 @app.websocket("/stream")
 async def websocket_stream(websocket: WebSocket) -> None:
     ## WebSocket endpoint for real-time detection event streaming.
-    ## Prefer x-api-key header authentication. The api_key query parameter is
-    ## accepted for browser clients, but URLs can leak through logs/history.
-    provided_key = websocket.headers.get("x-api-key") or websocket.query_params.get(
-        "api_key"
-    )
+    ## API keys are accepted only via the x-api-key header to avoid URL leakage.
+    provided_key = websocket.headers.get("x-api-key")
     if not _authorized_api_key(provided_key):
         await websocket.close(code=1008, reason="Invalid or missing API key")
         return
