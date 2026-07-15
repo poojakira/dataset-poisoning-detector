@@ -1,9 +1,5 @@
 ## Tests for the FastAPI service endpoints.
 
-import pytest
-
-pytest.importorskip("fastapi", reason="FastAPI optional dependency not installed")
-pytest.importorskip("httpx", reason="httpx (TestClient dependency) not installed")
 
 from fastapi.testclient import TestClient
 
@@ -67,6 +63,16 @@ def test_batch_endpoint_handles_multiple_samples(monkeypatch):
         assert "is_poisoned" in result
         assert "method_votes" in result
         assert "latency_ms" in result
+
+
+def test_batch_endpoint_rejects_excess_total_features(monkeypatch):
+    monkeypatch.setenv("POISON_DETECTOR_API_KEY", API_KEY)
+    client = TestClient(app)
+    payload = {"samples": [[0.0] * 10000 for _ in range(6)]}
+    response = client.post("/batch", json=payload, headers=AUTH_HEADERS)
+
+    assert response.status_code == 422
+    assert "50000" in response.text
 
 
 def test_websocket_stream_receives_events(monkeypatch):
