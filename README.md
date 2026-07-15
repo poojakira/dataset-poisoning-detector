@@ -11,8 +11,7 @@ evidence.
 > `StreamingDetector`, `contamination=0.05`), the operating point calibrated to a 5% target
 > false-positive rate yields a **measured false-positive rate of roughly 5%** on clean
 > samples, with ROC-AUC only modestly above chance (~0.53-0.56 across flip rates of
-> 0.05/0.10/0.25). See `scripts/eval_detector.py` and the generated `RESULTS.md` for the
-> exact numbers and provenance. Any claim of zero false positives should be treated as a
+> 0.05/0.10/0.25). Run `scripts/eval_detector.py` locally to regenerate exact numbers and provenance; `RESULTS.md` is generated output and is not committed by default. Any claim of zero false positives should be treated as a
 > reporting error, not a property of the method.
 
 ## Quick Start
@@ -251,27 +250,14 @@ class PoisonFilterStage:
 
 ### Performance Benchmarks
 
-Measured on a single core (Intel Xeon Platinum 8375C), 10-dimensional feature vectors,
-window_size=10000:
+No benchmark number in this README should be treated as a production SLO. Generate local results on your target hardware and keep the raw command output with any claim:
 
-| Metric              | Value          | Notes                                    |
-|---------------------|----------------|------------------------------------------|
-| Throughput          | 12,400 samples/sec | Single-threaded, ensemble scoring    |
-| Latency p50        | 0.08 ms        | Steady-state after baseline warm-up      |
-| Latency p95        | 0.14 ms        | Includes periodic IsoForest refit amort  |
-| Latency p99        | 0.31 ms        | Worst-case during baseline refit         |
-| Memory (10k window) | 45 MB         | Rolling window + IsoForest model         |
-| Memory (100k window)| 380 MB        | Linear in window size                    |
-| Drift detection    | +0.02 ms/sample | ADWIN + Page-Hinkley combined overhead  |
-| Fingerprint check  | +0.01 ms/sample | Bloom filter lookup (O(1))              |
+```bash
+python -m pip install -e ".[dev,realtime]"
+python scripts/eval_detector.py
+```
 
-With FastAPI service (4 uvicorn workers):
-
-| Metric              | Value          | Notes                                    |
-|---------------------|----------------|------------------------------------------|
-| HTTP throughput     | 8,200 req/sec  | POST /score, single sample per request   |
-| Batch throughput    | 45,000 samples/sec | POST /batch, 512 samples per request |
-| WebSocket throughput| 15,000 events/sec | Streaming detection results           |
+`RESULTS.md` is generated output and is not committed by default. Cite exact throughput, latency, memory, or false-positive numbers only when you have regenerated and reviewed that artifact from a clean checkout.
 
 ### When NOT to Use Real-Time Mode
 
@@ -305,13 +291,15 @@ training pipeline. Do not use it when:
 ## Installation
 
 ```bash
-pip install dataset-poisoning-detector
+git clone https://github.com/poojakira/dataset-poisoning-detector.git
+cd dataset-poisoning-detector
+python -m pip install -e ".[dev]"
 ```
 
 With real-time streaming support:
 
 ```bash
-pip install "dataset-poisoning-detector[realtime]"
+python -m pip install -e ".[dev,realtime]"
 ```
 
 With Kafka pipeline support:
@@ -359,27 +347,28 @@ pip install -e ".[dev,realtime]"
 pytest tests/ -v
 ```
 
-## Docker Deployment
+## Local Docker Integration Stack
 
 ```bash
-# Start the full stack (API + Redis + Kafka + Prometheus + Grafana)
+## PowerShell: set required secrets before startup.
+$env:POISON_DETECTOR_API_KEY = "replace-with-a-random-secret"
+$env:GRAFANA_ADMIN_PASSWORD = "change-me-before-use"
 docker compose up -d
 
-# Configure an API key before exposing scoring endpoints
-export POISON_DETECTOR_API_KEY="replace-with-a-random-secret"
-
-# Score a sample via the API
+## Score a sample via the API.
 curl -X POST http://localhost:8000/score \
   -H "Content-Type: application/json" \
   -H "X-API-Key: ${POISON_DETECTOR_API_KEY}" \
   -d '{"features": [0.1, 0.2, 0.3, 0.4, 0.5]}'
 
-# Check health
+## Check health.
 curl http://localhost:8000/health
 
-# View Grafana dashboards
-open http://localhost:3000  # admin/detector
+## View Grafana dashboards: admin / value of GRAFANA_ADMIN_PASSWORD.
+open http://localhost:3000
 ```
+
+The compose file is a local integration stack. It binds published ports to `127.0.0.1` and is not a hardened internet-facing production deployment.
 
 ## License
 

@@ -4,9 +4,8 @@ Verifies exact duplicate detection, near-duplicate threshold behavior,
 and empty/first input handling.
 """
 
-import numpy as np
 
-from poison_detector.fingerprint import SampleFingerprinter, FingerprintStats
+from poison_detector.fingerprint import SampleFingerprinter
 
 
 def test_duplicate_detection_flags_exact_same_sample():
@@ -65,7 +64,7 @@ def test_near_duplicate_threshold_controls_sensitivity():
     # cos_sim = 530 / (7.416 * 100.15) ~ 0.713
     # With threshold 0.9999, this should NOT be flagged (below threshold)
     # But first we need to check bloom filter won't catch it
-    result = fp_high.is_duplicate(different_sample)
+    assert fp_high.is_duplicate(different_sample) is False
     # The different_sample should NOT match as near-duplicate with strict threshold
     # (unless bloom filter perceptual hash catches it, which it shouldn't for
     # such a different vector)

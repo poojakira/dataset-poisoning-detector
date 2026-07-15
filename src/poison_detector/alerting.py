@@ -38,7 +38,6 @@ Security Notes:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import time
@@ -295,7 +294,7 @@ class CloudWatchChannel:
                 f"CloudWatch alert (boto3 not available): "
                 f"[{alert.severity.value}] {alert.title}"
             )
-            return True
+            return False
         except Exception as e:
             logger.warning(f"CloudWatch delivery failed: {e}")
             return False

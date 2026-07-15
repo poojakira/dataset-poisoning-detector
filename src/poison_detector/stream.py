@@ -41,7 +41,6 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any
 
 import numpy as np
 from sklearn.ensemble import IsolationForest
@@ -257,7 +256,6 @@ class StreamingDetector:
         # --- IsolationForest based detection ---
         iso_anomaly = False
         if self._model is not None:
-            raw_score = self._model.score_samples(sample_arr.reshape(1, -1))[0]
             # sklearn: lower score = more anomalous, threshold at 0
             # Normalize: decision_function gives offset from threshold
             decision = self._model.decision_function(sample_arr.reshape(1, -1))[0]
