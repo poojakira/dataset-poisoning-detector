@@ -215,6 +215,24 @@ class StreamingDetector:
         self._n_features = n_features
         self._welford = WelfordAccumulator(n_features)
 
+    def validate_sample(self, sample: list[float] | np.ndarray) -> np.ndarray:
+        ## Validate and normalize one sample without mutating detector state.
+        return self._coerce_sample(sample)
+
+    def _coerce_sample(self, sample: list[float] | np.ndarray) -> np.ndarray:
+        sample_arr = np.asarray(sample, dtype=np.float64)
+        if sample_arr.ndim != 1:
+            raise ValueError("Sample must be a one-dimensional feature vector")
+        if len(sample_arr) == 0:
+            raise ValueError("Sample must contain at least one feature")
+        if not np.all(np.isfinite(sample_arr)):
+            raise ValueError("Sample features must be finite")
+        if self._n_features is not None and len(sample_arr) != self._n_features:
+            raise ValueError(
+                f"Sample has {len(sample_arr)} features; expected {self._n_features}"
+            )
+        return sample_arr
+
     def score_sample(self, sample: list[float] | np.ndarray) -> ScoringResult:
         """Score a single sample for poisoning indicators.
 
@@ -229,7 +247,7 @@ class StreamingDetector:
         """
         start = time.perf_counter()
 
-        sample_arr = np.asarray(sample, dtype=np.float64)
+        sample_arr = self._coerce_sample(sample)
 
         # Lazy initialization on first sample
         if self._n_features is None:
@@ -320,6 +338,12 @@ class StreamingDetector:
         clean_arr = np.asarray(clean_samples, dtype=np.float64)
         if clean_arr.ndim == 1:
             clean_arr = clean_arr.reshape(1, -1)
+        if clean_arr.ndim != 2:
+            raise ValueError("Baseline samples must be a two-dimensional array")
+        if clean_arr.shape[1] == 0:
+            raise ValueError("Baseline samples must contain at least one feature")
+        if not np.all(np.isfinite(clean_arr)):
+            raise ValueError("Baseline features must be finite")
 
         n_samples, n_features = clean_arr.shape
 
@@ -417,7 +441,10 @@ class StreamingDetector:
                 self._window = self._window[-self.window_size :]
 
             # Periodic refit
-            if self._samples_since_refit >= self.refit_interval and len(self._window) >= 50:
+            if (
+                self._samples_since_refit >= self.refit_interval
+                and len(self._window) >= 50
+            ):
                 self._refit_model()
 
     def _refit_model(self) -> None:
