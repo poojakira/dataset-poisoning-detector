@@ -735,11 +735,13 @@ class KafkaConsumer(PipelineConsumer):
 
                 # Update backpressure estimate
                 # Use consumer lag as proxy for queue depth
-                lag = sum(
-                    (await self._consumer.end_offsets([tp]))[tp]
-                    - (await self._consumer.committed(tp) or 0)
-                    for tp in self._consumer.assignment()
-                ) if self._consumer.assignment() else 0
+                lag = 0
+                assignment = self._consumer.assignment()
+                if assignment:
+                    for tp in assignment:
+                        end_offsets = await self._consumer.end_offsets([tp])
+                        committed = await self._consumer.committed(tp)
+                        lag += end_offsets[tp] - (committed or 0)
                 self.update_backpressure(lag)
 
             except asyncio.CancelledError:

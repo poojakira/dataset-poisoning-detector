@@ -6,13 +6,12 @@ Redis/Kafka connections but tests actual message processing logic.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from poison_detector.pipeline import (
     PipelineMessage,
-    ProcessingResult,
     ProcessingMode,
     RedisConsumer,
 )
@@ -42,16 +41,6 @@ def test_message_processing_invokes_detector_correctly(sample_message):
         stream="test:incoming",
     )
 
-    # Simulate processing a message and recording results
-    result = ProcessingResult(
-        message_id=sample_message.message_id,
-        is_poisoned=False,
-        score=0.15,
-        quarantined=False,
-        dead_lettered=False,
-        error="",
-        processing_mode=ProcessingMode.FULL,
-    )
 
     # Record the processing
     consumer.record_processing(elapsed_ms=5.0, quarantined=False)

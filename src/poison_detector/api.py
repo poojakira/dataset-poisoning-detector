@@ -38,13 +38,10 @@ Security Notes:
 
 from __future__ import annotations
 
-import asyncio
 import os
 import time
-import traceback
 from collections import defaultdict
 from secrets import compare_digest
-from dataclasses import asdict
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
@@ -57,6 +54,11 @@ from .stream import StreamingDetector, ScoringResult
 from .config import DetectorConfig
 
 
+MAX_FEATURES_PER_SAMPLE = 10000
+MAX_BATCH_SAMPLES = 128
+MAX_BATCH_TOTAL_FEATURES = 50000
+
+
 # --- Pydantic Request/Response Models ---
 
 
@@ -66,8 +68,8 @@ class SampleRequest(BaseModel):
     features: list[float] = Field(
         ...,
         min_length=1,
-        max_length=100000,
-        description="Feature vector for the sample to score",
+        max_length=MAX_FEATURES_PER_SAMPLE,
+        description="Feature vector for the sample to score (max 10,000 features)",
     )
     source: str = Field(
         default="api",
@@ -85,7 +87,9 @@ class ScoringResponse(BaseModel):
     """Response body for single-sample scoring."""
 
     score: float = Field(description="Anomaly score in [0, 1]. Higher = more anomalous")
-    is_poisoned: bool = Field(description="Whether the sample exceeds the poisoning threshold")
+    is_poisoned: bool = Field(
+        description="Whether the sample exceeds the poisoning threshold"
+    )
     method_votes: dict[str, bool] = Field(description="Per-method poison votes")
     latency_ms: float = Field(description="Scoring latency in milliseconds")
 
@@ -96,8 +100,8 @@ class BatchRequest(BaseModel):
     samples: list[list[float]] = Field(
         ...,
         min_length=1,
-        max_length=1000,
-        description="List of feature vectors to score (max 1000)",
+        max_length=MAX_BATCH_SAMPLES,
+        description="List of feature vectors to score (max 128 samples, 50,000 total features)",
     )
     source: str = Field(
         default="api",
@@ -108,19 +112,26 @@ class BatchRequest(BaseModel):
     @field_validator("samples")
     @classmethod
     def validate_samples(cls, v: list[list[float]]) -> list[list[float]]:
-        """Ensure all samples have at least one feature."""
+        """Ensure all samples have at least one feature and stay within bounded work."""
         for i, sample in enumerate(v):
             if len(sample) < 1:
                 raise ValueError(f"Sample at index {i} must have at least 1 feature")
-            if len(sample) > 100000:
-                raise ValueError(f"Sample at index {i} exceeds 100000 features")
+            if len(sample) > MAX_FEATURES_PER_SAMPLE:
+                raise ValueError(
+                    f"Sample at index {i} exceeds {MAX_FEATURES_PER_SAMPLE} features"
+                )
+        total_features = sum(len(sample) for sample in v)
+        if total_features > MAX_BATCH_TOTAL_FEATURES:
+            raise ValueError(f"Batch exceeds {MAX_BATCH_TOTAL_FEATURES} total features")
         return v
 
 
 class BatchResponse(BaseModel):
     """Response body for batch scoring."""
 
-    results: list[ScoringResponse] = Field(description="Scoring results for each sample")
+    results: list[ScoringResponse] = Field(
+        description="Scoring results for each sample"
+    )
     total_samples: int = Field(description="Number of samples scored")
     poisoned_count: int = Field(description="Number of samples flagged as poisoned")
     batch_latency_ms: float = Field(description="Total batch processing time in ms")
@@ -254,7 +265,11 @@ _PROTECTED_PATHS = {"/score", "/batch"}
 
 
 def _allow_anonymous() -> bool:
-    return os.environ.get("POISON_DETECTOR_ALLOW_ANONYMOUS", "").lower() in {"1", "true", "yes"}
+    return os.environ.get("POISON_DETECTOR_ALLOW_ANONYMOUS", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
 def _configured_api_key() -> str:
@@ -289,7 +304,9 @@ async def rate_limit_middleware(request: Request, call_next: Any) -> Any:
 
     provided_key = request.headers.get("X-API-Key")
     if path in _PROTECTED_PATHS and not _authorized_api_key(provided_key):
-        status_code = 503 if not _configured_api_key() and not _allow_anonymous() else 401
+        status_code = (
+            503 if not _configured_api_key() and not _allow_anonymous() else 401
+        )
         detail = (
             "POISON_DETECTOR_API_KEY is not configured."
             if status_code == 503
@@ -333,20 +350,22 @@ async def score_sample(request: SampleRequest) -> ScoringResponse:
 
     # Broadcast to WebSocket clients if poisoned
     if result.is_poisoned:
-        await _ws_manager.broadcast({
-            "event": "poison_detected",
-            "score": result.score,
-            "method_votes": result.method_votes,
-            "source": request.source,
-            "latency_ms": result.latency_ms,
-        })
+        await _ws_manager.broadcast(
+            {
+                "event": "poison_detected",
+                "score": result.score,
+                "method_votes": result.method_votes,
+                "source": request.source,
+                "latency_ms": result.latency_ms,
+            }
+        )
 
     return response
 
 
 @app.post("/batch", response_model=BatchResponse)
 async def score_batch(request: BatchRequest) -> BatchResponse:
-    """Score a batch of up to 1000 samples.
+    """Score a bounded batch of samples.
 
     Processes samples sequentially and returns aggregated results.
     For true async processing, submit to the pipeline queue instead.
@@ -359,12 +378,14 @@ async def score_batch(request: BatchRequest) -> BatchResponse:
     try:
         for sample in request.samples:
             result = _detector.score_sample(sample)
-            results.append(ScoringResponse(
-                score=result.score,
-                is_poisoned=result.is_poisoned,
-                method_votes=result.method_votes,
-                latency_ms=result.latency_ms,
-            ))
+            results.append(
+                ScoringResponse(
+                    score=result.score,
+                    is_poisoned=result.is_poisoned,
+                    method_votes=result.method_votes,
+                    latency_ms=result.latency_ms,
+                )
+            )
             if result.is_poisoned:
                 poisoned_count += 1
     except Exception as e:
@@ -377,13 +398,15 @@ async def score_batch(request: BatchRequest) -> BatchResponse:
 
     # Broadcast batch summary to WebSocket clients
     if poisoned_count > 0:
-        await _ws_manager.broadcast({
-            "event": "batch_scored",
-            "total_samples": len(request.samples),
-            "poisoned_count": poisoned_count,
-            "source": request.source,
-            "batch_latency_ms": elapsed_ms,
-        })
+        await _ws_manager.broadcast(
+            {
+                "event": "batch_scored",
+                "total_samples": len(request.samples),
+                "poisoned_count": poisoned_count,
+                "source": request.source,
+                "batch_latency_ms": elapsed_ms,
+            }
+        )
 
     return BatchResponse(
         results=results,
@@ -461,7 +484,9 @@ async def websocket_stream(websocket: WebSocket) -> None:
     ## WebSocket endpoint for real-time detection event streaming.
     ## Prefer x-api-key header authentication. The api_key query parameter is
     ## accepted for browser clients, but URLs can leak through logs/history.
-    provided_key = websocket.headers.get("x-api-key") or websocket.query_params.get("api_key")
+    provided_key = websocket.headers.get("x-api-key") or websocket.query_params.get(
+        "api_key"
+    )
     if not _authorized_api_key(provided_key):
         await websocket.close(code=1008, reason="Invalid or missing API key")
         return

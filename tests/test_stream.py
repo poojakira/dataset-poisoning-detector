@@ -6,7 +6,7 @@ scoring, window overflow behavior, and full state reset.
 
 import numpy as np
 
-from poison_detector.stream import StreamingDetector, ScoringResult, StreamStats
+from poison_detector.stream import StreamingDetector, ScoringResult
 
 
 def test_rolling_window_maintains_correct_statistics():
