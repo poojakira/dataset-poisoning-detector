@@ -1,55 +1,41 @@
-# Multi-stage production build for Dataset Poisoning Detector API
-#
-# Build: docker build -t poison-detector:latest .
-# Run:   docker run -p 8000:8000 poison-detector:latest
-#
-# Security: runs as non-root user, no dev dependencies in final image,
-# minimal attack surface with slim base.
-
-# ─── Stage 1: Build ────────────────────────────────────────────────────────────
-FROM python:3.12-slim AS builder
-
-WORKDIR /build
-
-# Install build dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# Copy only dependency specification first (layer caching)
-COPY pyproject.toml .
-COPY src/ src/
-
-# Build wheel
-RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -e ".[realtime]"
-
-# ─── Stage 2: Production ──────────────────────────────────────────────────────
-FROM python:3.12-slim AS production
-
-# Security: create non-root user
-RUN groupadd -r detector && useradd -r -g detector -d /app -s /sbin/nologin detector
+# Dataset Poisoning Detector - Production Dockerfile
+FROM python:3.12-slim as builder
 
 WORKDIR /app
 
-# Install runtime dependencies from wheels (no compilation needed)
-COPY --from=builder /build/wheels /tmp/wheels
-COPY --from=builder /build/pyproject.toml .
-COPY --from=builder /build/src/ src/
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ libffi-dev libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --find-links /tmp/wheels -e ".[realtime]" \
-    && rm -rf /tmp/wheels
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Copy configuration
-COPY config/ config/
+# Production stage
+FROM python:3.12-slim
 
-# Switch to non-root user
-USER detector
+WORKDIR /app
 
-# Expose API port
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libffi8 libssl3 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /install /usr/local
+
+# Copy poison_detector source
+COPY src/poison_detector ./poison_detector
+COPY pyproject.toml .
+COPY README.md .
+
+RUN pip install --no-cache-dir -e .
+
+# Non-root user
+RUN groupadd -r mlsec && useradd -r -g mlsec mlsec
+RUN chown -R mlsec:mlsec /app
+USER mlsec
+
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
-## Run one worker because detector and rate-limit state are in-memory.
-ENTRYPOINT ["python", "-m", "uvicorn"]
-CMD ["poison_detector.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["uvicorn", "poison_detector.api:app", "--host", "0.0.0.0", "--port", "8000"]
