@@ -7,7 +7,7 @@
 # minimal attack surface with slim base.
 
 # ─── Stage 1: Build ────────────────────────────────────────────────────────────
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /build
 
@@ -22,7 +22,7 @@ COPY src/ src/
 RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -e ".[realtime]"
 
 # ─── Stage 2: Production ──────────────────────────────────────────────────────
-FROM python:3.12-slim AS production
+FROM python:3.14-slim AS production
 
 # Security: create non-root user
 RUN groupadd -r detector && useradd -r -g detector -d /app -s /sbin/nologin detector
