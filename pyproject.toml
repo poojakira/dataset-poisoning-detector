@@ -8,7 +8,7 @@ version = "0.2.0"
 description = "Detect poisoned training samples before they corrupt your model"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "poojakira"}
 ]
@@ -42,3 +42,22 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "N", "W", "B"]
+ignore = [
+    "N803",  # ML convention: X for feature matrix
+    "N806",  # ML convention: X for feature matrix
+    "W293",  # blank line whitespace
+    "B008",  # function call in default arg
+    "B007",  # loop control variable not used
+    "B904",  # raise from - some are intentional
+    "B905",  # zip without strict
+    "I001",  # import sorting - needs fix
+    "E501",  # line too long - some exceed
+    "F841",  # unused local variable - some intentional
+    "F401",  # unused imports - needs fix
+    "E402",  # module level import not at top - test fixture
+]
