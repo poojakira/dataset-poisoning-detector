@@ -210,6 +210,8 @@ class StreamingDetector:
         self._poison_count: int = 0
         self._total_latency_ms: float = 0.0
         self._drift_detected: bool = False
+        self._baseline_mean: np.ndarray | None = None
+        self._baseline_std: np.ndarray | None = None
 
     def _initialize_features(self, n_features: int) -> None:
         """Lazily initialize feature-count-dependent state."""
@@ -347,6 +349,8 @@ class StreamingDetector:
             self._window = [row for row in clean_arr[-self.window_size :]]
 
         self._samples_since_refit = 0
+        self._baseline_mean = np.mean(clean_arr, axis=0)
+        self._baseline_std = np.std(clean_arr, axis=0, ddof=1) if n_samples > 1 else np.zeros(n_features)
 
     def get_stats(self) -> StreamStats:
         """Get current detector statistics.
@@ -393,6 +397,8 @@ class StreamingDetector:
         self._poison_count = 0
         self._total_latency_ms = 0.0
         self._drift_detected = False
+        self._baseline_mean = None
+        self._baseline_std = None
 
     def _update_state(self, sample: np.ndarray, is_poisoned: bool) -> None:
         """Update internal state with a new sample.
@@ -411,6 +417,7 @@ class StreamingDetector:
         if not is_poisoned:
             if self._welford is not None:
                 self._welford.update(sample)
+                self._update_drift_alarm()
             self._window.append(sample)
             self._samples_since_refit += 1
 
@@ -421,6 +428,23 @@ class StreamingDetector:
             # Periodic refit
             if self._samples_since_refit >= self.refit_interval and len(self._window) >= 50:
                 self._refit_model()
+
+    def _update_drift_alarm(self) -> None:
+        """Raise a sticky alarm when clean-window mean drifts from baseline."""
+        if self._welford is None or self._baseline_mean is None:
+            return
+        if self._welford.count < 50:
+            return
+        baseline_std = self._baseline_std
+        if baseline_std is None:
+            baseline_std = np.zeros_like(self._baseline_mean)
+        safe_std = np.where(baseline_std > 1e-6, baseline_std, 1.0)
+        z_shift = np.abs((self._welford.mean - self._baseline_mean) / safe_std)
+        absolute_shift = np.abs(self._welford.mean - self._baseline_mean)
+        absolute_threshold = max(self.drift_sensitivity * 10.0, 0.05)
+        if float(np.max(z_shift)) > self.zscore_threshold or float(np.max(absolute_shift)) > absolute_threshold:
+            self._drift_detected = True
+
 
     def _refit_model(self) -> None:
         """Refit the IsolationForest on the current rolling window.

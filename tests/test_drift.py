@@ -7,6 +7,7 @@ sudden distribution shifts, sensitivity can be configured, and reset works.
 import numpy as np
 
 from poison_detector.drift import ConceptDriftDetector, ADWINDetector, PageHinkleyDetector
+from poison_detector.stream import StreamingDetector
 
 
 def test_no_drift_on_stable_distribution():
@@ -121,3 +122,14 @@ def test_reset_clears_drift_state():
     assert stats.samples_since_reset == 0
     assert stats.features_drifting == 0
     assert stats.is_drifting is False
+
+
+def test_streaming_detector_flags_slow_baseline_shift():
+    """Slow poison should raise a sticky drift alarm instead of silent adaptation."""
+    detector = StreamingDetector(window_size=500, drift_sensitivity=0.01, refit_interval=50)
+    detector.update_baseline([[0.0] for _ in range(100)])
+
+    for i in range(500):
+        detector.score_sample([i / 500.0])
+
+    assert detector.get_stats().drift_detected is True
