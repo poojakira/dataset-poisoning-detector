@@ -40,10 +40,16 @@ Honest Limitations:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
+import os
 
 from .statistical import zscore_detect, iqr_detect
 from .isolation import IsolationDetector
 from .attribution import feature_attribution
+
+log = logging.getLogger(__name__)
+DEFAULT_ENSEMBLE_THRESHOLD = 0.65
+DEFAULT_FP_BUDGET = 0.01
 
 
 @dataclass
@@ -226,6 +232,9 @@ def _ensemble_detect(X: list[list[float]]) -> DetectionReport:
     potentially missing borderline cases that only one method catches.
     """
     n_samples = len(X)
+    threshold = float(os.environ.get("POISONING_DETECTION_THRESHOLD", DEFAULT_ENSEMBLE_THRESHOLD))
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError("POISONING_DETECTION_THRESHOLD must be between 0 and 1")
 
     zscore_flagged = set(idx for idx, _ in zscore_detect(X))
     iqr_flagged = set(idx for idx, _ in iqr_detect(X))
@@ -244,7 +253,8 @@ def _ensemble_detect(X: list[list[float]]) -> DetectionReport:
             i in iqr_flagged,
             i in iso_flagged,
         ])
-        if votes >= 2:
+        score = votes / 3.0
+        if score > threshold:
             ensemble_flagged.add(i)
 
     attr = feature_attribution(X, sorted(ensemble_flagged))
@@ -269,6 +279,21 @@ def _ensemble_detect(X: list[list[float]]) -> DetectionReport:
             "zscore": len(zscore_flagged),
             "iqr": len(iqr_flagged),
             "isolation": len(iso_flagged),
+            "threshold": threshold,
         },
         per_sample=per_sample,
     )
+
+
+def enforce_fp_budget(fp_rate_estimate: float) -> None:
+    """Reject validation runs whose estimated false-positive rate exceeds budget."""
+    budget = float(os.environ.get("FP_BUDGET", DEFAULT_FP_BUDGET))
+    if fp_rate_estimate > budget:
+        log.warning(
+            "false_positive_budget_exceeded",
+            extra={"fp_rate_estimate": fp_rate_estimate, "budget": budget},
+        )
+        if os.environ.get("ALLOW_HIGH_FP", "").lower() != "true":
+            raise RuntimeError(
+                "FP_rate_estimate exceeds FP_BUDGET; set ALLOW_HIGH_FP=true to proceed explicitly"
+            )
