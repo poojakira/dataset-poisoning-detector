@@ -15,10 +15,11 @@ class ATTACKEnricher:
             "gradient_manipulation": ["T1565.003"],
             "data_injection_detected": ["T1195", "T1505"],
             "distribution_shift_anomaly": ["T1565", "T1027"],
-            "sleeper_agent_pattern": ["T1195.001", "T1497"],
+            "sleeper_agent_pattern": ["T1195.001", "T1497", "T1688"],
             "trojan_watermark_detected": ["T1027.002", "T1565"],
             "supply_chain_dataset_tampering": ["T1195.003"],
             "mislabeling_campaign": ["T1565.001", "T1036"],
+            "anomaly_suppression": ["T1685", "T1027"],
         }
 
     def enrich(self, finding_type: str, metadata: Dict[str, Any]) -> List[ATTACKMapping]:
