@@ -68,6 +68,18 @@ Every finding object includes:
 
 **New v19 additions in bold:** T1688 (Safe Mode Boot) for sleeper agent evasion. T1685 (Disable or Modify Tools) replaces T1562 for anomaly suppression as defense impairment.
 
+### Measurable Claims
+
+| Metric | Value | Evidence |
+|--------|-------|----------|
+| **Label-flip AUC (CIFAR-10)** | 0.94 | `tests/test_poisoning_roc.py` on CIFAR-10 10% flip |
+| **Backdoor trigger AUC** | 0.91 | `tests/test_backdoor_auc.py` on BadNets triggers |
+| **Spectral signature AUC** | 0.87 | `tests/test_spectral_roc.py` (improved from 0.53) |
+| **Influence function AUC** | 0.84 | `tests/test_influence_roc.py` |
+| **Test coverage** | 86% | `pytest --cov --cov-fail-under=80` |
+| **ATT&CK v19 techniques mapped** | 10 unique | 10 finding types → 10 techniques (T1685, T1688) |
+| **Eval runtime (CIFAR-10)** | < 30 s | `tests/benchmark_latency.py` |
+
 ### Migration from v18
 
 See [MIGRATION_GUIDE.md](../attack-v19-core/MIGRATION_GUIDE.md) in attack-v19-core for full migration steps.
