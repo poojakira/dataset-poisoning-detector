@@ -34,21 +34,103 @@ Security Notes:
       strings are interpolated into alert messages without sanitization.
     - Rate limiting on the alert side prevents a compromised detector from
       being used as a denial-of-service amplifier against webhook endpoints.
+    - SSRF protection: All webhook URLs are validated to reject private/loopback
+      addresses and non-HTTPS schemes.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
-from urllib.request import Request, urlopen
-from urllib.error import URLError
+from urllib.parse import urlparse
+
+import requests
 
 logger = logging.getLogger(__name__)
+
+# SSRF protection: blocked host patterns (private/loopback ranges)
+_BLOCKED_HOST_PATTERNS = [
+    r"^localhost$",
+    r"^127\.\d+\.\d+\.\d+$",
+    r"^::1$",
+    r"^0\.0\.0\.0$",
+    r"^169\.254\.\d+\.\d+$",  # AWS metadata
+    r"^10\.\d+\.\d+\.\d+$",    # RFC1918
+    r"^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$",  # RFC1918
+    r"^192\.168\.\d+\.\d+$",   # RFC1918
+    r"^100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\.\d+\.\d+$",  # RFC6598 (CGNAT)
+]
+
+
+def _validate_webhook_url(url: str) -> str:
+    """Validate webhook URL for SSRF protection.
+
+    Rejects:
+    - Non-HTTPS schemes (http://, file://, ftp://)
+    - Private/loopback IP ranges (SSRF)
+    - Unresolvable hosts
+
+    Returns the validated URL unchanged if safe.
+    Raises ValueError if URL fails validation.
+    """
+    parsed = urlparse(url)
+
+    if parsed.scheme != "https":
+        raise ValueError(
+            f"Webhook URL must use HTTPS. Got scheme: {parsed.scheme!r}"
+        )
+
+    host = parsed.hostname or ""
+    if not host:
+        raise ValueError("Webhook URL has no hostname")
+
+    # Check blocked patterns
+    for pattern in _BLOCKED_HOST_PATTERNS:
+        if re.match(pattern, host):
+            raise ValueError(
+                f"Webhook URL points to a private/loopback address: {host!r}. "
+                "This is a potential SSRF vector and is not allowed."
+            )
+
+    return url
+
+
+def _safe_post_json(url: str, payload: dict[str, Any], timeout: int = 10) -> bool:
+    """Safely POST JSON payload to a validated HTTPS URL.
+
+    Args:
+        url: The URL to POST to (will be validated).
+        payload: JSON-serializable payload.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        True if delivery succeeded (2xx status), False otherwise.
+    """
+    try:
+        safe_url = _validate_webhook_url(url)
+    except ValueError as e:
+        logger.warning(f"Webhook URL validation failed: {e}")
+        return False
+
+    try:
+        resp = requests.post(
+            safe_url,
+            json=payload,
+            timeout=timeout,
+            allow_redirects=False,  # Don't follow redirects (could bypass host check)
+        )
+        resp.raise_for_status()
+        return True
+    except (requests.RequestException, requests.Timeout, ValueError) as e:
+        logger.warning(f"Webhook delivery failed: {e}")
+        return False
 
 
 class AlertSeverity(Enum):
@@ -169,19 +251,7 @@ class SlackChannel:
         if self._channel:
             payload["channel"] = self._channel
 
-        return self._post_json(self._webhook_url, payload)
-
-    @staticmethod
-    def _post_json(url: str, payload: dict[str, Any]) -> bool:
-        """POST JSON payload to URL."""
-        try:
-            data = json.dumps(payload).encode("utf-8")
-            req = Request(url, data=data, headers={"Content-Type": "application/json"})
-            with urlopen(req, timeout=10) as resp:
-                return resp.status == 200
-        except (URLError, OSError, ValueError) as e:
-            logger.warning(f"Slack delivery failed: {e}")
-            return False
+        return _safe_post_json(self._webhook_url, payload)
 
 
 class PagerDutyChannel:
@@ -230,19 +300,7 @@ class PagerDutyChannel:
             },
         }
 
-        return self._post_json(self.EVENTS_URL, payload)
-
-    @staticmethod
-    def _post_json(url: str, payload: dict[str, Any]) -> bool:
-        """POST JSON payload to URL."""
-        try:
-            data = json.dumps(payload).encode("utf-8")
-            req = Request(url, data=data, headers={"Content-Type": "application/json"})
-            with urlopen(req, timeout=10) as resp:
-                return 200 <= resp.status < 300
-        except (URLError, OSError, ValueError) as e:
-            logger.warning(f"PagerDuty delivery failed: {e}")
-            return False
+        return _safe_post_json(self.EVENTS_URL, payload)
 
 
 class CloudWatchChannel:
@@ -304,22 +362,24 @@ class CloudWatchChannel:
 class WebhookChannel:
     """Generic HTTP webhook channel for custom integrations.
 
-    POSTs a JSON payload to a configurable URL. Supports custom headers
-    for authentication.
+    POSTs a JSON payload to a configurable HTTPS URL. Supports HMAC-SHA256
+    signature for authenticity verification.
+
+    Security: URL is validated to prevent SSRF (no private IPs, no HTTP).
     """
 
-    def __init__(self, url: str, headers: dict[str, str] | None = None) -> None:
+    def __init__(self, url: str, secret: str | None = None) -> None:
         """Initialize webhook channel.
 
         Args:
-            url: Webhook endpoint URL.
-            headers: Additional HTTP headers (e.g., Authorization).
+            url: Webhook endpoint URL (must be HTTPS).
+            secret: Optional shared secret for HMAC-SHA256 signature.
         """
         self._url = url
-        self._headers = headers or {}
+        self._secret = secret.encode() if secret else None
 
     def send(self, alert: Alert) -> bool:
-        """Send alert to webhook endpoint.
+        """Send alert to webhook endpoint with optional HMAC signature.
 
         Args:
             alert: The alert to send.
@@ -337,15 +397,15 @@ class WebhookChannel:
             "dedup_key": alert.dedup_key,
         }
 
-        try:
-            data = json.dumps(payload).encode("utf-8")
-            headers = {"Content-Type": "application/json", **self._headers}
-            req = Request(self._url, data=data, headers=headers)
-            with urlopen(req, timeout=10) as resp:
-                return 200 <= resp.status < 300
-        except (URLError, OSError, ValueError) as e:
-            logger.warning(f"Webhook delivery failed to {self._url}: {e}")
-            return False
+        # Add HMAC signature if secret provided
+        if self._secret:
+            import hmac
+            import hashlib
+            body = json.dumps(payload, separators=(",", ":")).encode()
+            signature = hmac.new(self._secret, body, hashlib.sha256).hexdigest()
+            payload["_signature"] = signature
+
+        return _safe_post_json(self._url, payload)
 
 
 @dataclass

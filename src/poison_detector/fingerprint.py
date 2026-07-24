@@ -116,9 +116,19 @@ class BloomFilter:
         return max(1, int(math.ceil(k)))
 
     def _get_bit_positions(self, item_bytes: bytes) -> list[int]:
-        """Compute hash positions for an item using double hashing."""
-        h1 = int(hashlib.md5(item_bytes).hexdigest(), 16)
-        h2 = int(hashlib.sha1(item_bytes).hexdigest(), 16)
+        """Compute hash positions for an item using double hashing.
+
+        Uses SHA256 with different seeds for double hashing.
+        The hashes are for Bloom filter index computation, not security.
+        """
+        # Use SHA256 with different prefixes for independent hash values
+        # usedforsecurity=False indicates this is for data structure integrity, not crypto
+        h1 = int(
+            hashlib.sha256(b"bloom1" + item_bytes, usedforsecurity=False).hexdigest(), 16
+        )
+        h2 = int(
+            hashlib.sha256(b"bloom2" + item_bytes, usedforsecurity=False).hexdigest(), 16
+        )
 
         positions = []
         for i in range(self._num_hashes):
