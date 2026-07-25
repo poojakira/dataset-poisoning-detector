@@ -37,7 +37,7 @@ def test_health_endpoint_returns_200_with_status_fields():
     assert "baseline_size" in data
     assert "queue_depth" in data
     assert "uptime_seconds" in data
-    assert isinstance(data["uptime_seconds"], (int, float))
+    assert isinstance(data["uptime_seconds"], int | float)
     assert data["uptime_seconds"] >= 0
 
 
@@ -55,7 +55,7 @@ def test_score_endpoint_returns_scoring_result():
     data = response.json()
 
     assert "score" in data
-    assert isinstance(data["score"], (int, float))
+    assert isinstance(data["score"], int | float)
     assert 0.0 <= data["score"] <= 1.0
     assert "is_poisoned" in data
     assert isinstance(data["is_poisoned"], bool)

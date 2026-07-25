@@ -43,7 +43,7 @@ def test_message_processing_invokes_detector_correctly(sample_message):
     )
 
     # Simulate processing a message and recording results
-    result = ProcessingResult(
+    ProcessingResult(
         message_id=sample_message.message_id,
         is_poisoned=False,
         score=0.15,

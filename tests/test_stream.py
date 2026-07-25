@@ -129,7 +129,7 @@ def test_score_is_continuous_in_unit_interval():
         scores.append(r.score)
 
     # Scores must vary (not a degenerate constant / pure 0-1 indicator).
-    assert len(set(round(s, 6) for s in scores)) > 1
+    assert len({round(s, 6) for s in scores}) > 1
 
 
 def test_contamination_implies_nonzero_false_positives():
