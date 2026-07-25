@@ -6,7 +6,7 @@ scoring, window overflow behavior, and full state reset.
 
 import numpy as np
 
-from poison_detector.stream import StreamingDetector, ScoringResult, StreamStats
+from poison_detector.stream import ScoringResult, StreamingDetector
 
 
 def test_rolling_window_maintains_correct_statistics():
@@ -15,7 +15,9 @@ def test_rolling_window_maintains_correct_statistics():
     Feeds a set of known samples and verifies that the internal statistics
     (mean, variance) match expected values computed from the data.
     """
-    detector = StreamingDetector(window_size=100, zscore_threshold=3.0, vote_threshold=2)
+    detector = StreamingDetector(
+        window_size=100, zscore_threshold=3.0, vote_threshold=2
+    )
 
     # Feed 50 samples drawn from a known distribution (mean=5, std~0)
     samples = [[5.0, 10.0] for _ in range(50)]

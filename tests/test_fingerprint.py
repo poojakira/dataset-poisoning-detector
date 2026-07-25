@@ -4,9 +4,7 @@ Verifies exact duplicate detection, near-duplicate threshold behavior,
 and empty/first input handling.
 """
 
-import numpy as np
-
-from poison_detector.fingerprint import SampleFingerprinter, FingerprintStats
+from poison_detector.fingerprint import SampleFingerprinter
 
 
 def test_duplicate_detection_flags_exact_same_sample():

@@ -1,5 +1,6 @@
 import pytest
-from attack_core import ATTACKLoader, ATTACKIndex
+from attack_core import ATTACKIndex, ATTACKLoader
+
 from attack_mapping.enricher import ATTACKEnricher
 
 
@@ -23,6 +24,8 @@ class TestDatasetPoisoningEnricher:
         assert "T1565.003" in technique_ids
 
     def test_supply_chain_tampering(self, enricher):
-        mappings = enricher.enrich("supply_chain_dataset_tampering", {"confidence": 0.85})
+        mappings = enricher.enrich(
+            "supply_chain_dataset_tampering", {"confidence": 0.85}
+        )
         technique_ids = [m.technique_id for m in mappings]
         assert "T1195.003" in technique_ids

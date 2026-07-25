@@ -1,11 +1,12 @@
 import json
-from typing import List
+
 from attack_core.models import ATTACKMapping
 
 
 class NavigatorLayerReporter:
     """Outputs ATT&CK Navigator layer JSON v4.5"""
-    def generate(self, repo_name: str, mappings: List[ATTACKMapping]) -> str:
+
+    def generate(self, repo_name: str, mappings: list[ATTACKMapping]) -> str:
         techniques = []
         seen = set()
         for m in mappings:
@@ -13,12 +14,14 @@ class NavigatorLayerReporter:
             if tid in seen:
                 continue
             seen.add(tid)
-            techniques.append({
-                "techniqueID": tid,
-                "score": int(m.confidence * 100),
-                "comment": f"{repo_name} detection",
-                "enabled": True,
-            })
+            techniques.append(
+                {
+                    "techniqueID": tid,
+                    "score": int(m.confidence * 100),
+                    "comment": f"{repo_name} detection",
+                    "enabled": True,
+                }
+            )
         layer = {
             "name": f"{repo_name} ATT&CK Coverage",
             "versions": {"attack": "19", "navigator": "4.9", "layer": "4.5"},

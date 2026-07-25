@@ -1,6 +1,6 @@
 """Tests for pure-Python statistical anomaly detection methods."""
 
-from poison_detector.statistical import zscore_detect, iqr_detect
+from poison_detector.statistical import iqr_detect, zscore_detect
 
 
 def test_zscore_detects_outlier():

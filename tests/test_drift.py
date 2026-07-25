@@ -6,7 +6,7 @@ sudden distribution shifts, sensitivity can be configured, and reset works.
 
 import numpy as np
 
-from poison_detector.drift import ConceptDriftDetector, ADWINDetector, PageHinkleyDetector
+from poison_detector.drift import ADWINDetector, ConceptDriftDetector
 
 
 def test_no_drift_on_stable_distribution():
@@ -87,9 +87,9 @@ def test_sensitivity_parameter_affects_detection():
             conservative_drifted = True
 
     # The sensitive detector should detect drift; conservative may not
-    assert sensitive_drifted is True, (
-        "Sensitive detector (delta=0.001) should detect a shift from mean=0 to mean=3"
-    )
+    assert (
+        sensitive_drifted is True
+    ), "Sensitive detector (delta=0.001) should detect a shift from mean=0 to mean=3"
     # Conservative with delta=0.5 has a large epsilon bound, may not trigger
     # This test verifies relative sensitivity ordering
     # (at minimum, sensitive must detect it)
