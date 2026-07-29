@@ -15,6 +15,7 @@ authors = [
 dependencies = [
     "scikit-learn>=1.5",
     "numpy>=1.26",
+    "attack-v19-core>=19.1,<20",
 ]
 
 [project.optional-dependencies]
