@@ -804,4 +804,3 @@ class KafkaConsumer(PipelineConsumer):
             return None
         except (AttributeError, TypeError, ValueError):
             return None
-
