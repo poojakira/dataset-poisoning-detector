@@ -293,9 +293,7 @@ class StreamingDetector:
             latency_ms=elapsed_ms,
         )
 
-    def score_batch(
-        self, samples: list[list[float]] | list[np.ndarray]
-    ) -> list[ScoringResult]:
+    def score_batch(self, samples: list[list[float]] | list[np.ndarray]) -> list[ScoringResult]:
         """Score a batch of samples.
 
         Convenience method that calls score_sample for each sample.

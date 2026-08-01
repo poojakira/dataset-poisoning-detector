@@ -109,15 +109,9 @@ class FeatureFlags(BaseSettings):
 
     enable_zscore: bool = Field(default=True, description="Enable z-score detection")
     enable_iqr: bool = Field(default=True, description="Enable IQR detection")
-    enable_isolation: bool = Field(
-        default=True, description="Enable Isolation Forest detection"
-    )
-    enable_drift_detection: bool = Field(
-        default=True, description="Enable concept drift detection"
-    )
-    enable_fingerprinting: bool = Field(
-        default=True, description="Enable sample fingerprinting"
-    )
+    enable_isolation: bool = Field(default=True, description="Enable Isolation Forest detection")
+    enable_drift_detection: bool = Field(default=True, description="Enable concept drift detection")
+    enable_fingerprinting: bool = Field(default=True, description="Enable sample fingerprinting")
     enable_alerting: bool = Field(
         default=False, description="Enable alert dispatch (off by default in dev)"
     )
@@ -129,9 +123,7 @@ class AlertConfig(BaseSettings):
     model_config = {"env_prefix": "POISON_ALERT_"}
 
     slack_webhook_url: str = Field(default="", description="Slack webhook URL")
-    pagerduty_routing_key: str = Field(
-        default="", description="PagerDuty Events API routing key"
-    )
+    pagerduty_routing_key: str = Field(default="", description="PagerDuty Events API routing key")
     webhook_urls: list[str] = Field(
         default_factory=list, description="Custom webhook URLs for alert dispatch"
     )

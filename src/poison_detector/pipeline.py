@@ -188,10 +188,7 @@ class PipelineConsumer(ABC):
         """
         self._stats.queue_depth = queue_depth
 
-        if (
-            self._current_mode == ProcessingMode.FULL
-            and queue_depth > self._backpressure_threshold
-        ):
+        if self._current_mode == ProcessingMode.FULL and queue_depth > self._backpressure_threshold:
             logger.warning(
                 f"Backpressure engaged: queue depth {queue_depth} > "
                 f"threshold {self._backpressure_threshold}. "
@@ -356,19 +353,14 @@ class RedisConsumer(PipelineConsumer):
             import redis.asyncio as aioredis
         except ImportError:
             raise ImportError(
-                "redis package required for RedisConsumer. "
-                "Install with: pip install redis"
+                "redis package required for RedisConsumer. " "Install with: pip install redis"
             )
 
         try:
-            self._client = aioredis.from_url(
-                self._redis_url, decode_responses=True
-            )
+            self._client = aioredis.from_url(self._redis_url, decode_responses=True)
             # Create consumer group (ignore error if already exists)
             try:
-                await self._client.xgroup_create(
-                    self._stream, self._group, id="0", mkstream=True
-                )
+                await self._client.xgroup_create(self._stream, self._group, id="0", mkstream=True)
             except Exception:
                 # Group already exists
                 pass
@@ -430,13 +422,9 @@ class RedisConsumer(PipelineConsumer):
 
                         if pipeline_msg is None:
                             # Malformed message -> dead letter
-                            await self._dead_letter_raw(
-                                msg_id, msg_data, "Failed to parse message"
-                            )
+                            await self._dead_letter_raw(msg_id, msg_data, "Failed to parse message")
                             self.record_dead_letter()
-                            await self._client.xack(
-                                self._stream, self._group, msg_id
-                            )
+                            await self._client.xack(self._stream, self._group, msg_id)
                             continue
 
                         try:
@@ -456,12 +444,8 @@ class RedisConsumer(PipelineConsumer):
                             await self.acknowledge(msg_id)
 
                         except Exception as e:
-                            logger.error(
-                                f"Handler error for message {msg_id}: {e}"
-                            )
-                            await self.dead_letter(
-                                pipeline_msg, f"Handler exception: {e}"
-                            )
+                            logger.error(f"Handler error for message {msg_id}: {e}")
+                            await self.dead_letter(pipeline_msg, f"Handler exception: {e}")
                             self.record_dead_letter()
                             await self.acknowledge(msg_id)
 
@@ -496,9 +480,7 @@ class RedisConsumer(PipelineConsumer):
                 "timestamp": message.timestamp or str(time.time()),
             }
             await self._client.xadd(self._dead_letter_stream, payload)
-            logger.warning(
-                f"Dead-lettered message {message.message_id}: {error}"
-            )
+            logger.warning(f"Dead-lettered message {message.message_id}: {error}")
 
     async def quarantine(self, message: PipelineMessage, score: float) -> None:
         """Route a flagged message to the quarantine stream.
@@ -516,13 +498,9 @@ class RedisConsumer(PipelineConsumer):
                 "timestamp": message.timestamp or str(time.time()),
             }
             await self._client.xadd(self._quarantine_stream, payload)
-            logger.info(
-                f"Quarantined message {message.message_id} (score={score:.3f})"
-            )
+            logger.info(f"Quarantined message {message.message_id} (score={score:.3f})")
 
-    async def _dead_letter_raw(
-        self, msg_id: str, raw_data: dict[str, str], error: str
-    ) -> None:
+    async def _dead_letter_raw(self, msg_id: str, raw_data: dict[str, str], error: str) -> None:
         """Route raw unparseable message data to dead letter."""
         if self._client:
             payload = {
@@ -534,9 +512,7 @@ class RedisConsumer(PipelineConsumer):
             await self._client.xadd(self._dead_letter_stream, payload)
 
     @staticmethod
-    def _parse_message(
-        msg_id: str, msg_data: dict[str, str]
-    ) -> PipelineMessage | None:
+    def _parse_message(msg_id: str, msg_data: dict[str, str]) -> PipelineMessage | None:
         """Parse a Redis Stream message into a PipelineMessage.
 
         Args:
@@ -630,8 +606,7 @@ class KafkaConsumer(PipelineConsumer):
             from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
         except ImportError:
             raise ImportError(
-                "aiokafka package required for KafkaConsumer. "
-                "Install with: pip install aiokafka"
+                "aiokafka package required for KafkaConsumer. " "Install with: pip install aiokafka"
             )
 
         try:
@@ -688,9 +663,7 @@ class KafkaConsumer(PipelineConsumer):
         while self._running:
             try:
                 # Fetch a batch of messages with timeout
-                batch = await self._consumer.getmany(
-                    timeout_ms=1000, max_records=batch_size
-                )
+                batch = await self._consumer.getmany(timeout_ms=1000, max_records=batch_size)
 
                 for tp, messages in batch.items():
                     for msg in messages:
@@ -698,9 +671,7 @@ class KafkaConsumer(PipelineConsumer):
                         pipeline_msg = self._parse_kafka_message(msg)
 
                         if pipeline_msg is None:
-                            await self._dead_letter_raw_kafka(
-                                msg, "Failed to parse message"
-                            )
+                            await self._dead_letter_raw_kafka(msg, "Failed to parse message")
                             self.record_dead_letter()
                             continue
 
@@ -714,19 +685,13 @@ class KafkaConsumer(PipelineConsumer):
                                 self.record_dead_letter()
                             elif result.quarantined:
                                 await self.quarantine(pipeline_msg, result.score)
-                                self.record_processing(
-                                    elapsed_ms, quarantined=True
-                                )
+                                self.record_processing(elapsed_ms, quarantined=True)
                             else:
                                 self.record_processing(elapsed_ms)
 
                         except Exception as e:
-                            logger.error(
-                                f"Handler error for Kafka message: {e}"
-                            )
-                            await self.dead_letter(
-                                pipeline_msg, f"Handler exception: {e}"
-                            )
+                            logger.error(f"Handler error for Kafka message: {e}")
+                            await self.dead_letter(pipeline_msg, f"Handler exception: {e}")
                             self.record_dead_letter()
 
                 # Commit offsets after processing batch
@@ -735,11 +700,15 @@ class KafkaConsumer(PipelineConsumer):
 
                 # Update backpressure estimate
                 # Use consumer lag as proxy for queue depth
-                lag = sum(
-                    (await self._consumer.end_offsets([tp]))[tp]
-                    - (await self._consumer.committed(tp) or 0)
-                    for tp in self._consumer.assignment()
-                ) if self._consumer.assignment() else 0
+                lag = (
+                    sum(
+                        (await self._consumer.end_offsets([tp]))[tp]
+                        - (await self._consumer.committed(tp) or 0)
+                        for tp in self._consumer.assignment()
+                    )
+                    if self._consumer.assignment()
+                    else 0
+                )
                 self.update_backpressure(lag)
 
             except asyncio.CancelledError:
@@ -776,9 +745,7 @@ class KafkaConsumer(PipelineConsumer):
                 "timestamp": message.timestamp or str(time.time()),
             }
             await self._producer.send(self._dead_letter_topic, payload)
-            logger.warning(
-                f"Dead-lettered Kafka message {message.message_id}: {error}"
-            )
+            logger.warning(f"Dead-lettered Kafka message {message.message_id}: {error}")
 
     async def quarantine(self, message: PipelineMessage, score: float) -> None:
         """Route a flagged message to the quarantine topic.
@@ -796,10 +763,7 @@ class KafkaConsumer(PipelineConsumer):
                 "timestamp": message.timestamp or str(time.time()),
             }
             await self._producer.send(self._quarantine_topic, payload)
-            logger.info(
-                f"Quarantined Kafka message {message.message_id} "
-                f"(score={score:.3f})"
-            )
+            logger.info(f"Quarantined Kafka message {message.message_id} " f"(score={score:.3f})")
 
     async def _dead_letter_raw_kafka(self, msg: Any, error: str) -> None:
         """Route unparseable Kafka message to dead letter."""

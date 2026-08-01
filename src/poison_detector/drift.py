@@ -175,9 +175,7 @@ class ADWINDetector:
             # Hoeffding bound for the difference of means
             # epsilon = sqrt((1/(2*n)) * ln(4/delta))
             m = 1.0 / (1.0 / n1 + 1.0 / n2)
-            epsilon_cut = math.sqrt(
-                (1.0 / (2.0 * m)) * math.log(4.0 / self.delta)
-            )
+            epsilon_cut = math.sqrt((1.0 / (2.0 * m)) * math.log(4.0 / self.delta))
 
             if abs(mean_1 - mean_2) >= epsilon_cut:
                 # Drift detected: drop the older sub-window
@@ -261,9 +259,7 @@ class PageHinkleyDetector:
         if self._count == 1:
             self._running_mean = value
         else:
-            self._running_mean = (
-                self.alpha * self._running_mean + (1 - self.alpha) * value
-            )
+            self._running_mean = self.alpha * self._running_mean + (1 - self.alpha) * value
 
         # Update cumulative sum
         self._cumulative_sum += value - self._running_mean - self.delta
@@ -349,9 +345,7 @@ class ConceptDriftDetector:
     def _initialize(self, n_features: int) -> None:
         """Initialize per-feature ADWIN detectors."""
         self._n_features = n_features
-        self._adwin_detectors = [
-            ADWINDetector(delta=self.delta) for _ in range(n_features)
-        ]
+        self._adwin_detectors = [ADWINDetector(delta=self.delta) for _ in range(n_features)]
         self._initialized = True
 
     def update(self, sample: list[float]) -> None:
@@ -385,12 +379,12 @@ class ConceptDriftDetector:
         feature_drift_ratio = features_drifting / n_features
         ph_triggered = self._page_hinkley.drift_detected
 
-        self._is_drifting = (
-            feature_drift_ratio >= self.drift_fraction or ph_triggered
-        )
+        self._is_drifting = feature_drift_ratio >= self.drift_fraction or ph_triggered
 
         # Compute drift score (0 = no drift, 1 = maximum drift)
-        ph_score = min(1.0, self._page_hinkley.test_statistic / max(self._page_hinkley.lambda_, 1.0))
+        ph_score = min(
+            1.0, self._page_hinkley.test_statistic / max(self._page_hinkley.lambda_, 1.0)
+        )
         adwin_score = feature_drift_ratio / max(self.drift_fraction, 0.01)
         self._drift_score = min(1.0, max(ph_score, adwin_score))
 
