@@ -180,9 +180,7 @@ class RateLimiter:
         window_start = now - self._window_seconds
 
         # Clean old entries
-        self._requests[api_key] = [
-            t for t in self._requests[api_key] if t > window_start
-        ]
+        self._requests[api_key] = [t for t in self._requests[api_key] if t > window_start]
 
         if len(self._requests[api_key]) >= self._max_requests:
             return False
@@ -307,13 +305,15 @@ async def score_sample(request: SampleRequest) -> ScoringResponse:
 
     # Broadcast to WebSocket clients if poisoned
     if result.is_poisoned:
-        await _ws_manager.broadcast({
-            "event": "poison_detected",
-            "score": result.score,
-            "method_votes": result.method_votes,
-            "source": request.source,
-            "latency_ms": result.latency_ms,
-        })
+        await _ws_manager.broadcast(
+            {
+                "event": "poison_detected",
+                "score": result.score,
+                "method_votes": result.method_votes,
+                "source": request.source,
+                "latency_ms": result.latency_ms,
+            }
+        )
 
     return response
 
@@ -333,12 +333,14 @@ async def score_batch(request: BatchRequest) -> BatchResponse:
     try:
         for sample in request.samples:
             result = _detector.score_sample(sample)
-            results.append(ScoringResponse(
-                score=result.score,
-                is_poisoned=result.is_poisoned,
-                method_votes=result.method_votes,
-                latency_ms=result.latency_ms,
-            ))
+            results.append(
+                ScoringResponse(
+                    score=result.score,
+                    is_poisoned=result.is_poisoned,
+                    method_votes=result.method_votes,
+                    latency_ms=result.latency_ms,
+                )
+            )
             if result.is_poisoned:
                 poisoned_count += 1
     except Exception as e:
@@ -351,13 +353,15 @@ async def score_batch(request: BatchRequest) -> BatchResponse:
 
     # Broadcast batch summary to WebSocket clients
     if poisoned_count > 0:
-        await _ws_manager.broadcast({
-            "event": "batch_scored",
-            "total_samples": len(request.samples),
-            "poisoned_count": poisoned_count,
-            "source": request.source,
-            "batch_latency_ms": elapsed_ms,
-        })
+        await _ws_manager.broadcast(
+            {
+                "event": "batch_scored",
+                "total_samples": len(request.samples),
+                "poisoned_count": poisoned_count,
+                "source": request.source,
+                "batch_latency_ms": elapsed_ms,
+            }
+        )
 
     return BatchResponse(
         results=results,

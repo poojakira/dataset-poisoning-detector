@@ -55,7 +55,7 @@ def _std(values: list[float], mean: float) -> float:
     if len(values) < 2:
         return 0.0
     variance = sum((x - mean) ** 2 for x in values) / len(values)
-    return variance ** 0.5
+    return variance**0.5
 
 
 def _percentile(sorted_vals: list[float], p: float) -> float:
@@ -82,9 +82,7 @@ def _percentile(sorted_vals: list[float], p: float) -> float:
     return sorted_vals[floor_k] + fraction * (sorted_vals[ceil_k] - sorted_vals[floor_k])
 
 
-def zscore_detect(
-    X: list[list[float]], threshold: float = 3.0
-) -> list[tuple[int, float]]:
+def zscore_detect(X: list[list[float]], threshold: float = 3.0) -> list[tuple[int, float]]:
     """Detect anomalous samples using per-feature z-score analysis.
 
     For each sample, computes the z-score of every feature relative to the
@@ -137,9 +135,7 @@ def zscore_detect(
     return flagged
 
 
-def iqr_detect(
-    X: list[list[float]], k: float = 1.5
-) -> list[tuple[int, float]]:
+def iqr_detect(X: list[list[float]], k: float = 1.5) -> list[tuple[int, float]]:
     """Detect anomalous samples using per-feature IQR fencing.
 
     The IQR method is more robust to outliers than z-score because it uses

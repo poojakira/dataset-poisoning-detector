@@ -83,9 +83,7 @@ def test_quarantine_routing_sends_flagged_samples(sample_message):
     # Simulate quarantine routing
     loop = asyncio.new_event_loop()
     try:
-        loop.run_until_complete(
-            consumer.quarantine(sample_message, score=0.92)
-        )
+        loop.run_until_complete(consumer.quarantine(sample_message, score=0.92))
     finally:
         loop.close()
 
@@ -125,9 +123,7 @@ def test_dead_letter_on_processing_failure(sample_message):
 
     loop = asyncio.new_event_loop()
     try:
-        loop.run_until_complete(
-            consumer.dead_letter(sample_message, error=error_msg)
-        )
+        loop.run_until_complete(consumer.dead_letter(sample_message, error=error_msg))
     finally:
         loop.close()
 
