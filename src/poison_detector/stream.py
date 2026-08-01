@@ -327,15 +327,17 @@ class StreamingDetector:
         self._initialize_features(n_features)
 
         # Update Welford statistics with all clean samples
+        assert self._welford is not None
         for row in clean_arr:
             self._welford.update(row)
 
         # Fit IsolationForest
         self._model = IsolationForest(
-            contamination=self.contamination,
+            contamination=self.contamination,  # type: ignore[arg-type]
             random_state=42,
             n_estimators=100,
         )
+        assert self._model is not None
         self._model.fit(clean_arr)
 
         # Set window to clean samples (up to window_size)
@@ -428,9 +430,12 @@ class StreamingDetector:
         """
         window_arr = np.array(self._window)
         self._model = IsolationForest(
-            contamination=self.contamination,
+            contamination=self.contamination,  # type: ignore[arg-type]
             random_state=42,
             n_estimators=100,
         )
+        assert self._model is not None
         self._model.fit(window_arr)
         self._samples_since_refit = 0
+
+
