@@ -1,4 +1,10 @@
-# Docker Compose for Dataset Poisoning Detector - Production Stack
+# Docker Compose for Dataset Poisoning Detector - Local Demo Stack
+#
+# Security note:
+#   This compose file is for local evaluation. It exposes service ports, uses plaintext
+#   Kafka, and defaults Grafana credentials for convenience. Do not deploy it as a
+#   production stack without private bindings, broker/auth hardening, TLS, secret
+#   management, and tenant-scoped API authentication.
 #
 # Services:
 #   - api:         FastAPI detection service (scores samples via REST/WebSocket)
@@ -26,7 +32,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - POISON_ENVIRONMENT=production
+      - POISON_ENVIRONMENT=local-demo
       - POISON_REDIS_URL=redis://redis:6379/0
       - POISON_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - POISON_LOG_LEVEL=info
@@ -128,7 +134,7 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=detector
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-detector}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
