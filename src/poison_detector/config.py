@@ -250,5 +250,3 @@ def _load_yaml_file(path: str | Path) -> dict[str, Any] | None:
         return None
     except (yaml.YAMLError, OSError):
         return None
-
-
