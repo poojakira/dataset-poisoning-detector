@@ -437,5 +437,3 @@ class StreamingDetector:
         assert self._model is not None
         self._model.fit(window_arr)
         self._samples_since_refit = 0
-
-

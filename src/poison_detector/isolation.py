@@ -100,4 +100,3 @@ class IsolationDetector:
             normalized.append((i, float(norm_score)))
 
         return normalized
-
