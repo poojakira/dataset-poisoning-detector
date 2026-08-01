@@ -15,7 +15,6 @@ authors = [
 dependencies = [
     "scikit-learn>=1.5",
     "numpy>=1.26",
-    "attack-v19-core>=19.1,<20",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +36,7 @@ realtime = [
 kafka = [
     "aiokafka>=0.10",
 ]
+attack = ["attack-v19-core>=19.1,<20"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -49,16 +49,16 @@ line-length = 100
 target-version = "py310"
 select = ["E", "F", "I", "N", "W", "B"]
 ignore = [
-    "N803",  # ML convention: X for feature matrix
-    "N806",  # ML convention: X for feature matrix
-    "W293",  # blank line whitespace
-    "B008",  # function call in default arg
-    "B007",  # loop control variable not used
-    "B904",  # raise from - some are intentional
-    "B905",  # zip without strict
-    "I001",  # import sorting - needs fix
-    "E501",  # line too long - some exceed
-    "F841",  # unused local variable - some intentional
-    "F401",  # unused imports - needs fix
-    "E402",  # module level import not at top - test fixture
+    "N803",
+    "N806",
+    "W293",
+    "B008",
+    "B007",
+    "B904",
+    "B905",
+    "I001",
+    "E501",
+    "F841",
+    "F401",
+    "E402",
 ]
