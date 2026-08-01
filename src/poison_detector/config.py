@@ -39,6 +39,7 @@ try:
 
     _YAML_AVAILABLE = True
 except ImportError:
+    yaml = None
     _YAML_AVAILABLE = False
 
 from pydantic_settings import BaseSettings
@@ -235,6 +236,7 @@ def _load_yaml_file(path: str | Path) -> dict[str, Any] | None:
     """
     if not _YAML_AVAILABLE:
         return None
+    assert yaml is not None
 
     path = Path(path)
     if not path.exists():
@@ -248,3 +250,5 @@ def _load_yaml_file(path: str | Path) -> dict[str, Any] | None:
         return None
     except (yaml.YAMLError, OSError):
         return None
+
+

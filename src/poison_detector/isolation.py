@@ -65,7 +65,7 @@ class IsolationDetector:
         self.contamination = contamination
         self.random_state = random_state
         self._model = IsolationForest(
-            contamination=contamination,
+            contamination=contamination,  # type: ignore[arg-type]
             random_state=random_state,
             n_estimators=100,
         )
@@ -100,3 +100,4 @@ class IsolationDetector:
             normalized.append((i, float(norm_score)))
 
         return normalized
+
