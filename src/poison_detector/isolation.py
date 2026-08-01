@@ -26,7 +26,7 @@ Honest Limitations:
       changes all scores (non-stationary).
 
 Why scikit-learn:
-    - Battle-tested implementation with known algorithmic properties.
+    - Widely used scikit-learn implementation with known algorithmic properties.
     - Reproducible via random_state parameter.
     - NOT auditable at the Python level (Cython internals), which is why
       this module is paired with pure-Python statistical methods for

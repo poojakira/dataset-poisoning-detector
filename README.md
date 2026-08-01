@@ -142,12 +142,12 @@ for sample in data_stream:
 
 ### Enterprise Use Cases
 
-**OpenAI - Fine-Tuning API Pipeline**
+**Fine-tuning data pipeline example**
 
 When customers upload training data for fine-tuning, each sample passes through the
 streaming detector before entering the training queue. Catches attempts to inject
 adversarial instructions, embed backdoor triggers, or poison RLHF reward signals.
-At OpenAI's scale (millions of fine-tuning samples/day), the O(1) per-sample cost
+In high-volume fine-tuning pipelines, the O(1) per-sample cost
 matters -- you cannot afford to re-scan the entire dataset on every new upload.
 
 ```python
@@ -162,7 +162,7 @@ async def on_finetune_sample(sample_embedding):
     return {"status": "accepted"}
 ```
 
-**Anthropic - RLHF Preference Data Validation**
+**RLHF preference data validation example**
 
 RLHF preference pairs are high-value targets: poisoning a small fraction can shift
 model behavior without triggering obvious quality metrics. The drift detector catches
@@ -186,7 +186,7 @@ def validate_preference_pair(chosen_embedding, rejected_embedding):
         reject("Duplicate preference pair - possible ballot stuffing")
 ```
 
-**Amazon - SageMaker Data Pipeline Integration**
+**Managed training pipeline example**
 
 Plugs into SageMaker Processing jobs as a preprocessing step. Training data flows
 from S3 through the detector before reaching the training instance. Quarantined
@@ -215,7 +215,7 @@ def process_training_batch(s3_input_path, s3_output_path, s3_quarantine_path):
             write_to_s3(s3_output_path, sample)
 ```
 
-**NVIDIA - NeMo Training Data Curation**
+**Data curation pipeline example**
 
 Integrates with NeMo Curator for large-scale training data filtering. The streaming
 detector is intended for review-oriented triage pipelines, while
@@ -245,7 +245,7 @@ class PoisonFilterStage:
         return keep
 ```
 
-### Performance Benchmarks
+### Local Microbenchmark Example
 
 Measured on a single core (Intel Xeon Platinum 8375C), 10-dimensional feature vectors,
 window_size=10000:
