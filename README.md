@@ -282,9 +282,9 @@ training pipeline. Do not use it when:
   meaningful baseline to distinguish signal from noise. With small datasets, manual
   review is more effective and less error-prone.
 
-- **Latency budget is under 10 microseconds**: The streaming detector adds ~80us p50
-  per sample. If your pipeline has a hard real-time constraint tighter than this (e.g.,
-  serving path), run detection asynchronously or in a sidecar.
+- **Sub-millisecond serving-path budgets**: The local benchmark measured ~80us p50
+  and ~140us p95 per sample before application-specific overhead. If your pipeline
+  cannot tolerate that headroom, run detection asynchronously or in a sidecar.
 
 - **You trust your data source completely**: If data comes from an internal, audited,
   access-controlled source with no external contributors, the attack surface may not
