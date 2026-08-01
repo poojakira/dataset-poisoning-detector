@@ -112,9 +112,11 @@ def export_csv(report: "DetectionReport") -> str:
     writer = csv.writer(output)
     writer.writerow(["sample_idx", "score", "is_poisoned"])
     for result in report.per_sample:
-        writer.writerow([
-            result.sample_idx,
-            f"{result.anomaly_score:.6f}",
-            result.is_poisoned,
-        ])
+        writer.writerow(
+            [
+                result.sample_idx,
+                f"{result.anomaly_score:.6f}",
+                result.is_poisoned,
+            ]
+        )
     return output.getvalue()

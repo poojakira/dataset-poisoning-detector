@@ -25,9 +25,7 @@ def test_isolation_returns_scores_for_all():
     detector = IsolationDetector()
     results = detector.fit_predict(X)
 
-    assert len(results) == len(X), (
-        f"Expected {len(X)} results, got {len(results)}"
-    )
+    assert len(results) == len(X), f"Expected {len(X)} results, got {len(results)}"
     indices = [idx for idx, _ in results]
     assert sorted(indices) == list(range(50))
 

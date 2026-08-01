@@ -208,9 +208,7 @@ class SampleFingerprinter:
         self.max_reference_size = max_reference_size
         self.hash_precision = hash_precision
 
-        self._bloom = BloomFilter(
-            capacity=bloom_capacity, error_rate=bloom_error_rate
-        )
+        self._bloom = BloomFilter(capacity=bloom_capacity, error_rate=bloom_error_rate)
         self._reference_set: list[np.ndarray] = []
         self._reference_norms: list[float] = []
 

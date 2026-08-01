@@ -57,6 +57,7 @@ class PoisonResult:
         features_flagged: List of feature indices that contributed most.
         is_poisoned: Whether the sample exceeds the detection threshold.
     """
+
     sample_idx: int
     anomaly_score: float
     method: str
@@ -74,6 +75,7 @@ class DetectionReport:
         method_scores: Per-method summary scores (e.g., count flagged per method).
         per_sample: Detailed per-sample results.
     """
+
     total_samples: int
     poisoned_count: int
     method_scores: dict[str, float] = field(default_factory=dict)
@@ -137,13 +139,15 @@ def _zscore_report(X: list[list[float]]) -> DetectionReport:
         is_poisoned = i in flagged_set
         score = score_map.get(i, 0.0)
         features = [f_idx for f_idx, _ in attr.get(i, [])[:3]]
-        per_sample.append(PoisonResult(
-            sample_idx=i,
-            anomaly_score=score,
-            method="zscore",
-            features_flagged=features,
-            is_poisoned=is_poisoned,
-        ))
+        per_sample.append(
+            PoisonResult(
+                sample_idx=i,
+                anomaly_score=score,
+                method="zscore",
+                features_flagged=features,
+                is_poisoned=is_poisoned,
+            )
+        )
 
     return DetectionReport(
         total_samples=n_samples,
@@ -168,13 +172,15 @@ def _iqr_report(X: list[list[float]]) -> DetectionReport:
         is_poisoned = i in flagged_set
         score = score_map.get(i, 0.0)
         features = [f_idx for f_idx, _ in attr.get(i, [])[:3]]
-        per_sample.append(PoisonResult(
-            sample_idx=i,
-            anomaly_score=score,
-            method="iqr",
-            features_flagged=features,
-            is_poisoned=is_poisoned,
-        ))
+        per_sample.append(
+            PoisonResult(
+                sample_idx=i,
+                anomaly_score=score,
+                method="iqr",
+                features_flagged=features,
+                is_poisoned=is_poisoned,
+            )
+        )
 
     return DetectionReport(
         total_samples=n_samples,
@@ -202,13 +208,15 @@ def _isolation_report(X: list[list[float]]) -> DetectionReport:
         is_poisoned = i in flagged_set
         score = score_map.get(i, 0.0)
         features = [f_idx for f_idx, _ in attr.get(i, [])[:3]]
-        per_sample.append(PoisonResult(
-            sample_idx=i,
-            anomaly_score=score,
-            method="isolation",
-            features_flagged=features,
-            is_poisoned=is_poisoned,
-        ))
+        per_sample.append(
+            PoisonResult(
+                sample_idx=i,
+                anomaly_score=score,
+                method="isolation",
+                features_flagged=features,
+                is_poisoned=is_poisoned,
+            )
+        )
 
     return DetectionReport(
         total_samples=n_samples,
@@ -239,11 +247,13 @@ def _ensemble_detect(X: list[list[float]]) -> DetectionReport:
 
     ensemble_flagged: set[int] = set()
     for i in range(n_samples):
-        votes = sum([
-            i in zscore_flagged,
-            i in iqr_flagged,
-            i in iso_flagged,
-        ])
+        votes = sum(
+            [
+                i in zscore_flagged,
+                i in iqr_flagged,
+                i in iso_flagged,
+            ]
+        )
         if votes >= 2:
             ensemble_flagged.add(i)
 
@@ -254,13 +264,15 @@ def _ensemble_detect(X: list[list[float]]) -> DetectionReport:
         is_poisoned = i in ensemble_flagged
         score = iso_score_map.get(i, 0.0)
         features = [f_idx for f_idx, _ in attr.get(i, [])[:3]]
-        per_sample.append(PoisonResult(
-            sample_idx=i,
-            anomaly_score=score,
-            method="ensemble",
-            features_flagged=features,
-            is_poisoned=is_poisoned,
-        ))
+        per_sample.append(
+            PoisonResult(
+                sample_idx=i,
+                anomaly_score=score,
+                method="ensemble",
+                features_flagged=features,
+                is_poisoned=is_poisoned,
+            )
+        )
 
     return DetectionReport(
         total_samples=n_samples,

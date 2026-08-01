@@ -9,19 +9,19 @@ from poison_detector.report import export_json
 def test_ensemble_majority_vote():
     """Ensemble should flag samples only when >= 2 methods agree."""
     X = [[float(i) * 0.1, float(i) * 0.1] for i in range(95)]
-    X.extend([
-        [100.0, 100.0],
-        [110.0, 110.0],
-        [120.0, 120.0],
-        [130.0, 130.0],
-        [140.0, 140.0],
-    ])
+    X.extend(
+        [
+            [100.0, 100.0],
+            [110.0, 110.0],
+            [120.0, 120.0],
+            [130.0, 130.0],
+            [140.0, 140.0],
+        ]
+    )
 
     report = detect(X, method="ensemble")
 
-    poisoned_indices = [
-        r.sample_idx for r in report.per_sample if r.is_poisoned
-    ]
+    poisoned_indices = [r.sample_idx for r in report.per_sample if r.is_poisoned]
     outlier_range = set(range(95, 100))
     caught = set(poisoned_indices) & outlier_range
     assert len(caught) > 0, "Ensemble should catch at least some extreme outliers"
