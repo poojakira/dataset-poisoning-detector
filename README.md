@@ -1,10 +1,6 @@
 # Dataset Poisoning Detector
 
-Found hundreds of mislabeled samples in a production training set using this. The model had
-been slowly degrading for weeks -- turns out someone upstream was injecting garbage labels
-into the data pipeline. Three different detection methods independently flagged an
-overlapping cluster of suspicious samples, and ensemble voting narrowed the candidates for
-manual review.
+Dataset Poisoning Detector is a Python toolkit for flagging anomalous or suspicious training samples before they enter an ML pipeline. It combines simple statistical detectors, density-based anomaly scoring, sample fingerprinting, drift checks, and an optional FastAPI streaming service so reviewers can triage candidate poisoning events instead of trusting a single score.
 
 > **Honesty note on false positives.** This detector does **not** achieve "zero false
 > positives," and no anomaly detector operating at a nonzero contamination rate can. On a
@@ -12,8 +8,8 @@ manual review.
 > `StreamingDetector`, `contamination=0.05`), the operating point calibrated to a 5% target
 > false-positive rate yields a **measured false-positive rate of roughly 5%** on clean
 > samples, with ROC-AUC only modestly above chance (~0.53-0.56 across flip rates of
-> 0.05/0.10/0.25). See `scripts/eval_detector.py` and the generated `RESULTS.md` for the
-> exact numbers and provenance. Any claim of zero false positives should be treated as a
+> 0.05/0.10/0.25). See `scripts/eval_detector.py` for reproducible evaluation. Commit generated result artifacts before citing
+> exact numbers externally. Any claim of zero false positives should be treated as a
 > reporting error, not a property of the method.
 
 ## Quick Start
@@ -60,8 +56,8 @@ Each detection method catches a different attack shape:
   miss, but is a black box and can be fooled in high dimensions.
 
 **Ensemble majority vote** requires agreement from at least 2 of 3 methods. This means:
-- False positive rate drops dramatically (a sample has to look weird in multiple ways)
-- You lose some borderline true positives (acceptable tradeoff for production use)
+- False positives can drop when methods agree, but the rate depends on the dataset and contamination setting
+- You can lose borderline true positives; tune this tradeoff against a labeled validation set
 - Different failure modes of each method cancel out rather than compound
 
 ## Available Methods
@@ -91,7 +87,7 @@ attr = feature_attribution(X_train, flagged_indices)
 ## Real-Time Detection
 
 v0.2.0 adds streaming detection for production data pipelines. Samples are scored as
-they arrive -- no batch accumulation, no reprocessing, sub-millisecond per-sample latency.
+they arrive. Measure latency and throughput in the target environment before citing performance externally.
 
 ```python
 from poison_detector import StreamingDetector, ConceptDriftDetector, SampleFingerprinter
@@ -222,7 +218,7 @@ def process_training_batch(s3_input_path, s3_output_path, s3_quarantine_path):
 **NVIDIA - NeMo Training Data Curation**
 
 Integrates with NeMo Curator for large-scale training data filtering. The streaming
-detector handles the throughput requirements of multi-billion-token datasets, while
+detector is intended for review-oriented triage pipelines, while
 the fingerprinter catches duplication attacks that would bias the training distribution.
 Drift detection identifies when data source quality degrades over time.
 
@@ -362,7 +358,7 @@ pytest tests/ -v
 ## Docker Deployment
 
 ```bash
-# Start the full stack (API + Redis + Kafka + Prometheus + Grafana)
+# Start the local demo stack (API + Redis + Kafka + Prometheus + Grafana)
 docker compose up -d
 
 # Score a sample via the API
@@ -374,7 +370,7 @@ curl -X POST http://localhost:8000/score \
 curl http://localhost:8000/health
 
 # View Grafana dashboards
-open http://localhost:3000  # admin/detector
+open http://localhost:3000  # local demo credentials; change before any shared environment
 ```
 
 ## License
