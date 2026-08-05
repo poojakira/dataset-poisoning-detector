@@ -6,6 +6,10 @@ A Python toolkit for flagging suspicious samples in ML training data. It runs a 
 
 This is not a silver bullet. It's a screening tool — it helps you find candidates for human review.
 
+## Status
+
+**Research baseline, not a production detector.** The core anomaly detection algorithm achieves ROC-AUC ~0.53–0.56 on a CIFAR-10 label-flip benchmark — only modestly above random chance. The surrounding Kafka, Redis, FastAPI, and streaming infrastructure explores what a production pipeline might look like, but the detection quality does not yet justify production deployment. Improve detection before relying on this in a real data pipeline.
+
 ## Honest Performance Note
 
 On a CIFAR-10 label-flip benchmark (standardized pixels → PCA-50, per-class `StreamingDetector`, `contamination=0.05`), the measured ROC-AUC is **~0.53–0.56** across flip rates of 0.05/0.10/0.25. That's only modestly above chance.
