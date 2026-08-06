@@ -12,6 +12,12 @@ over the sampled pool) then reduce to 50 principal components via PCA fit on the
 pooled sampled data. This is a generic, model-free feature space; label-flip
 detection then reduces to "does this sample look like it belongs to the class it
 claims to belong to?" in that space.
+
+CIFAR-10 data directory:
+    Pass the path explicitly to load_cifar_batches(cifar_dir=...) or set the
+    CIFAR_DIR environment variable. No hardcoded path is used. Download CIFAR-10
+    from https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz and extract it
+    to a local directory, then supply that path.
 """
 from __future__ import annotations
 
@@ -21,12 +27,47 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-CIFAR_DIR = r"C:\Users\pooja\eval_work\cifar10\cifar-10-batches-py"
 NUM_CLASSES = 10
 
 
-def load_cifar_batches(cifar_dir: str = CIFAR_DIR):
-    """Load and concatenate all training batches. Returns (X uint8 [N,3072], y int [N])."""
+def get_cifar_dir() -> str:
+    """Return the CIFAR-10 data directory from the environment.
+
+    Reads the CIFAR_DIR environment variable. Raises FileNotFoundError with
+    a clear message if it is not set, rather than falling back to a
+    hardcoded path that would only work on one developer's machine.
+
+    Returns:
+        Path to the CIFAR-10 batches directory.
+
+    Raises:
+        FileNotFoundError: If CIFAR_DIR env var is not set.
+    """
+    cifar_dir = os.environ.get("CIFAR_DIR", "")
+    if not cifar_dir:
+        raise FileNotFoundError(
+            "CIFAR-10 data directory not specified. "
+            "Set the CIFAR_DIR environment variable to the path of the "
+            "cifar-10-batches-py directory, or pass cifar_dir= explicitly to "
+            "load_cifar_batches(). "
+            "Download CIFAR-10 from: "
+            "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
+        )
+    return cifar_dir
+
+
+def load_cifar_batches(cifar_dir: str | None = None):
+    """Load and concatenate all training batches. Returns (X uint8 [N,3072], y int [N]).
+
+    Args:
+        cifar_dir: Path to the cifar-10-batches-py directory. If None, reads
+            from the CIFAR_DIR environment variable via get_cifar_dir().
+
+    Raises:
+        FileNotFoundError: If the directory or any batch file is missing.
+    """
+    if cifar_dir is None:
+        cifar_dir = get_cifar_dir()
     if not os.path.isdir(cifar_dir):
         raise FileNotFoundError(
             f"CIFAR-10 batch dir not found: {cifar_dir}. Download/extract first (fail closed)."

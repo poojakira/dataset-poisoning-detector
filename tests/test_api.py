@@ -1,12 +1,13 @@
 """Tests for the FastAPI service endpoints.
 
-Verifies health endpoint, single-sample scoring, batch scoring, and
-WebSocket streaming using the FastAPI TestClient.
+Verifies health endpoint, single-sample scoring, batch scoring,
+WebSocket streaming, and API key authentication using the FastAPI TestClient.
 
 Skipped automatically when the optional FastAPI stack is not installed
 (FastAPI is an optional/`realtime` dependency, not part of `[dev]`).
 """
 
+import os
 import pytest
 
 pytest.importorskip("fastapi", reason="FastAPI optional dependency not installed")
@@ -15,6 +16,61 @@ pytest.importorskip("httpx", reason="httpx (TestClient dependency) not installed
 from fastapi.testclient import TestClient
 
 from poison_detector.api import app
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _client_with_key(api_key: str) -> TestClient:
+    """Return a TestClient that sends X-API-Key on every request."""
+    client = TestClient(app, headers={"X-API-Key": api_key})
+    return client
+
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+
+
+def test_score_returns_401_when_no_api_key(monkeypatch):
+    """POST /score must return 401 when X-API-Key header is absent and API_KEY is set."""
+    monkeypatch.setenv("API_KEY", "test-secret")
+    # Reimport to pick up the env var (module-level _EXPECTED_API_KEY).
+    import importlib
+    import poison_detector.api as api_module
+    importlib.reload(api_module)
+    client = TestClient(api_module.app)  # no X-API-Key header
+    response = client.post("/score", json={"features": [1.0, 2.0, 3.0]})
+    assert response.status_code == 401
+
+
+def test_score_returns_401_when_wrong_api_key(monkeypatch):
+    """POST /score must return 401 when X-API-Key header contains a wrong value."""
+    monkeypatch.setenv("API_KEY", "correct-secret")
+    import importlib
+    import poison_detector.api as api_module
+    importlib.reload(api_module)
+    client = TestClient(api_module.app, headers={"X-API-Key": "wrong-key"})
+    response = client.post("/score", json={"features": [1.0, 2.0, 3.0]})
+    assert response.status_code == 401
+
+
+def test_health_does_not_require_api_key(monkeypatch):
+    """GET /health must return 200 even without an X-API-Key header."""
+    monkeypatch.setenv("API_KEY", "test-secret")
+    import importlib
+    import poison_detector.api as api_module
+    importlib.reload(api_module)
+    client = TestClient(api_module.app)  # no X-API-Key header
+    response = client.get("/health")
+    assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Functional (authenticated)
+# ---------------------------------------------------------------------------
 
 
 def test_health_endpoint_returns_200_with_status_fields():
@@ -41,13 +97,17 @@ def test_health_endpoint_returns_200_with_status_fields():
     assert data["uptime_seconds"] >= 0
 
 
-def test_score_endpoint_returns_scoring_result():
+def test_score_endpoint_returns_scoring_result(monkeypatch):
     """POST /score returns a valid scoring result with all fields.
 
-    Submits a sample feature vector and verifies the response includes
-    score, is_poisoned, method_votes, and latency_ms.
+    Submits a sample feature vector with a valid API key and verifies the
+    response includes score, is_poisoned, method_votes, and latency_ms.
     """
-    client = TestClient(app)
+    monkeypatch.setenv("API_KEY", "test-secret")
+    import importlib
+    import poison_detector.api as api_module
+    importlib.reload(api_module)
+    client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
     payload = {"features": [1.0, 2.0, 3.0, 4.0, 5.0]}
     response = client.post("/score", json=payload)
 
@@ -65,13 +125,17 @@ def test_score_endpoint_returns_scoring_result():
     assert data["latency_ms"] >= 0.0
 
 
-def test_batch_endpoint_handles_multiple_samples():
+def test_batch_endpoint_handles_multiple_samples(monkeypatch):
     """POST /batch scores multiple samples and returns aggregated results.
 
-    Submits a batch of 3 samples and verifies the response structure
-    including per-sample results and batch-level statistics.
+    Submits a batch of 3 samples with a valid API key and verifies the
+    response structure including per-sample results and batch-level statistics.
     """
-    client = TestClient(app)
+    monkeypatch.setenv("API_KEY", "test-secret")
+    import importlib
+    import poison_detector.api as api_module
+    importlib.reload(api_module)
+    client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
     payload = {
         "samples": [
             [1.0, 2.0, 3.0, 4.0, 5.0],
@@ -101,13 +165,17 @@ def test_batch_endpoint_handles_multiple_samples():
         assert "latency_ms" in result
 
 
-def test_websocket_stream_receives_events():
+def test_websocket_stream_receives_events(monkeypatch):
     """WebSocket /stream endpoint accepts connections and echoes ack events.
 
-    Connects via WebSocket, sends a text message, and verifies that the
-    server responds with an acknowledgment event.
+    Connects via WebSocket with a valid API key, sends a text message, and
+    verifies that the server responds with an acknowledgment event.
     """
-    client = TestClient(app)
+    monkeypatch.setenv("API_KEY", "test-secret")
+    import importlib
+    import poison_detector.api as api_module
+    importlib.reload(api_module)
+    client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
     with client.websocket_connect("/stream") as ws:
         # Send a ping message
         ws.send_text("ping")
