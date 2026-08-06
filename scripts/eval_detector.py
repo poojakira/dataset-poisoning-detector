@@ -14,9 +14,14 @@ Methodology (see task spec):
 
 Feature choice: standardized raw pixels -> PCA(50), fit on the pooled sampled
 data. Documented in make_labelflip_cifar.py.
+
+Usage:
+    python scripts/eval_detector.py --cifar-dir /path/to/cifar-10-batches-py
+    python scripts/eval_detector.py --cifar-dir /data/cifar10 --output-dir ./results
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -31,6 +36,7 @@ from make_labelflip_cifar import (  # noqa: E402
     build_features,
     build_labelflip_groups,
     NUM_CLASSES,
+    get_cifar_dir,
 )
 
 from poison_detector.stream import StreamingDetector  # noqa: E402
@@ -45,14 +51,18 @@ PCA_DIMS = 50
 # Draw 900/class from CIFAR (9000 rows) to have room for disjoint poison picks.
 N_SAMPLE_PER_CLASS_POOL = 900
 
-PROVENANCE = {
-    "dataset": "CIFAR-10 (python batches)",
-    "url": "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz",
-    "sha256": "6D958BE074577803D12ECDEFD02955F39262C83C16FE9348329D7FE0B5C001CE",
-    "size_bytes": 170498071,
-    "downloaded_utc": "2026-07-13T19:36:25Z",
-    "local_dir": r"C:\Users\pooja\eval_work\cifar10\cifar-10-batches-py",
-}
+
+def build_provenance(cifar_dir: str) -> dict:
+    """Build the provenance record using the resolved cifar_dir (not hardcoded)."""
+    return {
+        "dataset": "CIFAR-10 (python batches)",
+        "url": "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz",
+        "sha256": "6D958BE074577803D12ECDEFD02955F39262C83C16FE9348329D7FE0B5C001CE",
+        "size_bytes": 170498071,
+        "downloaded_utc": "2026-07-13T19:36:25Z",
+        # local_dir now comes from the CLI argument, not a hardcoded path.
+        "local_dir": cifar_dir,
+    }
 
 
 def subsample_pool(X, y, per_class, seed):
@@ -163,14 +173,38 @@ def evaluate_flip_rate(feats, y, flip_rate):
 
 
 def main():
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_dir = os.path.join(
-        r"C:\Users\pooja\eval_artifacts\dataset-poisoning-detector", ts
+    parser = argparse.ArgumentParser(
+        description="Evaluate StreamingDetector on CIFAR-10 label-flip poisoning."
     )
+    parser.add_argument(
+        "--cifar-dir",
+        default=None,
+        help=(
+            "Path to the cifar-10-batches-py directory. "
+            "If omitted, falls back to the CIFAR_DIR environment variable."
+        ),
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help=(
+            "Directory to write evaluation artifacts (report.json, RESULTS.md). "
+            "Defaults to ./eval_artifacts/<timestamp> relative to the current "
+            "working directory."
+        ),
+    )
+    args = parser.parse_args()
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    base_out = args.output_dir if args.output_dir else os.path.join("eval_artifacts", ts)
+    out_dir = base_out if args.output_dir else base_out
     os.makedirs(out_dir, exist_ok=True)
 
+    # Resolve the CIFAR directory from CLI arg or env var (fail-closed, no hardcoded path).
+    cifar_dir: str = args.cifar_dir if args.cifar_dir else get_cifar_dir()
+
     print("Loading CIFAR-10...")
-    X, y = load_cifar_batches()
+    X, y = load_cifar_batches(cifar_dir=cifar_dir)
     print(f"Loaded {X.shape[0]} samples, {X.shape[1]} features.")
 
     Xp, yp = subsample_pool(X, y, N_SAMPLE_PER_CLASS_POOL, SEED)
@@ -211,7 +245,7 @@ def main():
         "n_clean_per_class": N_CLEAN_PER_CLASS,
         "flip_rates": FLIP_RATES,
         "target_fpr": TARGET_FPR,
-        "provenance": PROVENANCE,
+        "provenance": build_provenance(cifar_dir),
         "results": results,
         "caveat": (
             "This measures LABEL-FLIP poisoning detection (wrong labels, unchanged "

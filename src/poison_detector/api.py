@@ -29,7 +29,10 @@ Honest Limitations:
 
 Security Notes:
     - All inputs validated via Pydantic. No raw dict access from request bodies.
-    - API key passed via X-API-Key header, validated in middleware.
+    - API key passed via X-API-Key header, validated in api_key_auth_middleware.
+      Returns HTTP 401 if the header is absent, empty, or does not match the
+      value in os.environ['API_KEY']. The service starts in fail-closed mode
+      if API_KEY is not set (all protected endpoints return 401).
     - No eval(), exec(), or dynamic code execution from request data.
     - WebSocket connections are unauthenticated in this implementation.
       Add token validation for production use.
@@ -40,6 +43,7 @@ Security Notes:
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 import traceback
 from collections import defaultdict
@@ -254,16 +258,61 @@ app = FastAPI(
 
 # --- Middleware ---
 
+# Endpoints that bypass authentication (monitoring/health checks only).
+_UNAUTHENTICATED_PATHS = frozenset({"/health", "/stats", "/metrics"})
+
+# Resolve expected API key at module load time. If API_KEY is not set the
+# service starts in fail-closed mode: all authenticated endpoints return 401.
+_EXPECTED_API_KEY: str = os.environ.get("API_KEY", "")
+
+
+@app.middleware("http")
+async def api_key_auth_middleware(request: Request, call_next: Any) -> Any:
+    """Enforce X-API-Key authentication on all non-monitoring endpoints.
+
+    Security properties:
+        - Reads the expected key from os.environ['API_KEY'] at startup.
+          The key is never hardcoded and never logged or echoed in responses.
+        - Returns HTTP 401 if API_KEY env var is not set (fail-closed: no
+          implicit open access when the secret is missing).
+        - Returns HTTP 401 if the X-API-Key header is absent or does not
+          match the expected value (constant-time comparison via hmac.compare_digest).
+        - Skips auth for /health, /stats, and /metrics so infrastructure
+          monitoring does not require credentials.
+        - WebSocket /stream endpoint requires the X-API-Key header in the
+          initial HTTP upgrade request.
+    """
+    import hmac
+
+    if request.url.path in _UNAUTHENTICATED_PATHS:
+        return await call_next(request)
+
+    if not _EXPECTED_API_KEY:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "API key authentication is not configured. Set API_KEY env var."},
+        )
+
+    provided_key = request.headers.get("X-API-Key", "")
+    # Use hmac.compare_digest to prevent timing attacks.
+    if not provided_key or not hmac.compare_digest(provided_key, _EXPECTED_API_KEY):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Unauthorized. Provide a valid X-API-Key header."},
+        )
+
+    return await call_next(request)
+
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next: Any) -> Any:
     """Apply rate limiting based on X-API-Key header.
 
     Security Note:
-        The X-API-Key header is used for rate-limit bucketing only, not for
-        authentication. This is by design for an internal service where
-        network-level access control (VPC, service mesh) provides the security
-        boundary. Requests without the header are bucketed as "anonymous".
+        Authentication is handled by api_key_auth_middleware (above).
+        This middleware only enforces per-key request rate limits.
+        Requests without the header that reach this point (i.e., unauthenticated
+        paths that bypass auth) are bucketed as "anonymous".
     """
     # Skip rate limiting for health and metrics endpoints
     if request.url.path in ("/health", "/stats", "/metrics"):
