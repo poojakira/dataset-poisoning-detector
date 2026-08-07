@@ -1,6 +1,6 @@
 # Dataset Poisoning Detector
 
-[![Live Dashboard](https://img.shields.io/badge/Live_Dashboard-View-blue)](https://poojakira.github.io/dataset-poisoning-detector/)
+[![Demo Dashboard (static)](https://img.shields.io/badge/Demo_Dashboard-Static-lightgrey)](https://poojakira.github.io/dataset-poisoning-detector/)
 
 A Python toolkit for flagging suspicious samples in ML training data. It runs a few statistical and density-based anomaly detectors over your feature matrix and tells you which samples look unusual. You then decide what to do about them.
 
