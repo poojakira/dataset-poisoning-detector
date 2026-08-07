@@ -34,6 +34,7 @@ from .statistical import zscore_detect, iqr_detect
 from .isolation import IsolationDetector
 from .attribution import feature_attribution
 from .report import format_report, export_json, export_csv
+from .spectral import spectral_detect, detect_label_flips, SpectralReport, SpectralResult
 
 __all__ = [
     "PoisonResult",
@@ -46,6 +47,10 @@ __all__ = [
     "format_report",
     "export_json",
     "export_csv",
+    "spectral_detect",
+    "detect_label_flips",
+    "SpectralReport",
+    "SpectralResult",
 ]
 
 __version__ = "0.2.0"
