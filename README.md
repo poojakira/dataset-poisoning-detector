@@ -1,3 +1,5 @@
+> ⚠️ **RESEARCH BASELINE — ROC-AUC 0.53-0.56 on CIFAR-10 = near random chance**
+
 # Dataset Poisoning Detector
 
 [![Demo Dashboard (static)](https://img.shields.io/badge/Demo_Dashboard-Static-lightgrey)](https://poojakira.github.io/dataset-poisoning-detector/)
@@ -17,6 +19,12 @@ On a CIFAR-10 label-flip benchmark (standardized pixels → PCA-50, per-class `S
 At a 5% target false-positive rate, the actual false-positive rate is roughly 5% on clean samples. This is what you'd expect from a detector calibrated at that threshold — not a failure, but not magic either.
 
 Any claim of "zero false positives" from this tool is a reporting error. See `scripts/eval_detector.py` to reproduce these numbers yourself.
+
+## Honest Assessment
+
+- **The feature-space anomaly detection approach (z-score/IQR/IsolationForest) cannot catch label-flip attacks which don't change features.** These methods only detect statistical outliers in the input space — if the attack modifies labels while leaving features untouched, there is nothing for these detectors to find.
+- **For production data poisoning detection, consider [CleanLab](https://github.com/cleanlab/cleanlab) (confident learning) or spectral signatures.** These approaches reason about label-feature consistency and can detect the class of attacks this tool fundamentally cannot.
+- **The streaming infrastructure (Kafka, Redis, FastAPI) is well-engineered but wraps an algorithm that needs fundamental replacement.** The pipeline architecture is sound; the core detection logic is not. Swap in a better algorithm before deploying.
 
 ## What It Does
 
