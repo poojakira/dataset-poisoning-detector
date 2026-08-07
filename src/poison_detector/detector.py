@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from .statistical import zscore_detect, iqr_detect
 from .isolation import IsolationDetector
 from .attribution import feature_attribution
+from .spectral import spectral_detect
 
 
 @dataclass
@@ -82,7 +83,7 @@ class DetectionReport:
     per_sample: list[PoisonResult] = field(default_factory=list)
 
 
-def detect(X: list[list[float]], method: str = "ensemble") -> DetectionReport:
+def detect(X: list[list[float]], method: str = "ensemble", labels: list[int] | None = None) -> DetectionReport:
     """Run poisoning detection on a feature matrix.
 
     This is the main entry point. Takes a raw feature matrix and returns
@@ -96,18 +97,33 @@ def detect(X: list[list[float]], method: str = "ensemble") -> DetectionReport:
             - "iqr": IQR fencing (pure Python)
             - "isolation": Isolation Forest (scikit-learn)
             - "ensemble": Majority vote across all three (default)
+            - "spectral": Spectral signature analysis (requires labels)
+        labels: Integer class labels for each sample. REQUIRED for "spectral"
+            method. For label-flip poisoning detection, this is the only
+            method that actually works (feature-space methods cannot detect
+            label-only corruptions).
 
     Returns:
         DetectionReport with per-sample results and summary statistics.
 
     Raises:
         ValueError: If method is not one of the supported methods.
+        ValueError: If labels is None when method="spectral".
     """
-    valid_methods = {"zscore", "iqr", "isolation", "ensemble"}
+    valid_methods = {"zscore", "iqr", "isolation", "ensemble", "spectral"}
     if method not in valid_methods:
         raise ValueError(f"Unknown method '{method}'. Must be one of {valid_methods}")
 
     n_samples = len(X)
+
+    if method == "spectral":
+        if labels is None:
+            raise ValueError(
+                "labels are required for spectral detection. "
+                "Spectral signatures analyze the covariance structure "
+                "WITHIN each class to find mislabeled samples."
+            )
+        return _spectral_report(X, labels)
 
     if method == "ensemble":
         return _ensemble_detect(X)
@@ -282,5 +298,38 @@ def _ensemble_detect(X: list[list[float]]) -> DetectionReport:
             "iqr": len(iqr_flagged),
             "isolation": len(iso_flagged),
         },
+        per_sample=per_sample,
+    )
+
+
+def _spectral_report(X: list[list[float]], labels: list[int]) -> DetectionReport:
+    """Generate report using spectral signature detection.
+
+    This is the recommended method for label-flip poisoning. It examines
+    the covariance structure within each class — poisoned samples (which
+    have the wrong label) will have high projection onto the top singular
+    vector of their assigned class.
+    """
+    report = spectral_detect(X, labels)
+
+    per_sample: list[PoisonResult] = []
+    for result in report.results:
+        per_sample.append(
+            PoisonResult(
+                sample_idx=result.sample_idx,
+                anomaly_score=result.projection_score,
+                method="spectral",
+                features_flagged=[],  # spectral works on projections, not individual features
+                is_poisoned=result.is_poisoned,
+            )
+        )
+
+    # Sort by sample index for consistent output
+    per_sample.sort(key=lambda r: r.sample_idx)
+
+    return DetectionReport(
+        total_samples=report.total_samples,
+        poisoned_count=report.poisoned_count,
+        method_scores={"spectral": report.poisoned_count},
         per_sample=per_sample,
     )
