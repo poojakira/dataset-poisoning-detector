@@ -12,19 +12,13 @@ This is not a silver bullet. It's a screening tool — it helps you find candida
 
 **Research baseline, not a production detector.** The core anomaly detection algorithm achieves ROC-AUC ~0.53–0.56 on a CIFAR-10 label-flip benchmark — only modestly above random chance. The surrounding Kafka, Redis, FastAPI, and streaming infrastructure explores what a production pipeline might look like, but the detection quality does not yet justify production deployment. Improve detection before relying on this in a real data pipeline.
 
-## Honest Performance Note
+## Limitations
 
-On a CIFAR-10 label-flip benchmark (standardized pixels → PCA-50, per-class `StreamingDetector`, `contamination=0.05`), the measured ROC-AUC is **~0.53–0.56** across flip rates of 0.05/0.10/0.25. That's only modestly above chance.
-
-At a 5% target false-positive rate, the actual false-positive rate is roughly 5% on clean samples. This is what you'd expect from a detector calibrated at that threshold — not a failure, but not magic either.
-
-Any claim of "zero false positives" from this tool is a reporting error. See `scripts/eval_detector.py` to reproduce these numbers yourself.
-
-## Honest Assessment
-
+- **ROC-AUC ~0.53–0.56 on CIFAR-10 label-flip benchmark** (standardized pixels → PCA-50, per-class `StreamingDetector`, `contamination=0.05`). Only modestly above random chance. See `scripts/eval_detector.py` to reproduce.
 - **The feature-space anomaly detection approach (z-score/IQR/IsolationForest) cannot catch label-flip attacks which don't change features.** These methods only detect statistical outliers in the input space — if the attack modifies labels while leaving features untouched, there is nothing for these detectors to find.
 - **For production data poisoning detection, consider [CleanLab](https://github.com/cleanlab/cleanlab) (confident learning) or spectral signatures.** These approaches reason about label-feature consistency and can detect the class of attacks this tool fundamentally cannot.
 - **The streaming infrastructure (Kafka, Redis, FastAPI) is well-engineered but wraps an algorithm that needs fundamental replacement.** The pipeline architecture is sound; the core detection logic is not. Swap in a better algorithm before deploying.
+- At a 5% target false-positive rate, the actual FPR is roughly 5% on clean samples. Any claim of "zero false positives" from this tool is a reporting error.
 
 ## What It Does
 
