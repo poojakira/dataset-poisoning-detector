@@ -34,6 +34,7 @@ Dependencies:
     - numpy (for SVD computation)
     - No scikit-learn required for the core algorithm
 """
+
 from __future__ import annotations
 
 import math
@@ -55,6 +56,7 @@ class SpectralResult:
         is_poisoned: Whether projection exceeds threshold.
         rank_in_class: Rank of this sample's score within its class (1 = most suspicious).
     """
+
     sample_idx: int
     label: int
     projection_score: float
@@ -73,6 +75,7 @@ class SpectralReport:
         per_class_stats: Summary statistics per class.
         results: Per-sample results sorted by suspicion score.
     """
+
     total_samples: int
     poisoned_count: int
     per_class_stats: dict[int, dict[str, Any]] = field(default_factory=dict)
@@ -141,9 +144,7 @@ def spectral_detect(
     if labels_arr.ndim != 1:
         raise ValueError(f"labels must be 1-dimensional, got shape {labels_arr.shape}")
     if len(X_arr) != len(labels_arr):
-        raise ValueError(
-            f"X and labels must have same length: {len(X_arr)} vs {len(labels_arr)}"
-        )
+        raise ValueError(f"X and labels must have same length: {len(X_arr)} vs {len(labels_arr)}")
     if len(X_arr) == 0:
         return SpectralReport(total_samples=0, poisoned_count=0)
 
@@ -207,7 +208,7 @@ def spectral_detect(
         threshold = q3 + iqr_multiplier * iqr
 
         # Explained variance ratio for diagnostics
-        total_var = np.sum(S ** 2)
+        total_var = np.sum(S**2)
         explained_var = np.sum(S[:top_k] ** 2) / total_var if total_var > 0 else 0.0
 
         # Rank samples within this class by score (descending)
@@ -223,14 +224,16 @@ def spectral_detect(
             if is_poisoned:
                 flagged_count += 1
 
-            all_results.append(SpectralResult(
-                sample_idx=global_idx,
-                label=class_label_int,
-                projection_score=round(score, 6),
-                threshold=round(threshold, 6),
-                is_poisoned=is_poisoned,
-                rank_in_class=rank_map[local_idx],
-            ))
+            all_results.append(
+                SpectralResult(
+                    sample_idx=global_idx,
+                    label=class_label_int,
+                    projection_score=round(score, 6),
+                    threshold=round(threshold, 6),
+                    is_poisoned=is_poisoned,
+                    rank_in_class=rank_map[local_idx],
+                )
+            )
 
         per_class_stats[class_label_int] = {
             "size": class_size,

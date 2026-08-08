@@ -6,6 +6,7 @@ Tests for spectral signature-based poisoning detection.
 Key validation: demonstrates that spectral signatures CAN detect label-flip
 attacks that feature-space methods (z-score, IQR, IsolationForest) miss.
 """
+
 import numpy as np
 import pytest
 
@@ -175,9 +176,7 @@ class TestSpectralVsFeatureSpace:
         # Run ensemble (z-score + IQR + isolation)
         ensemble_report = detect(X, method="ensemble")
         # The first 5 samples are from class 0 — they're not feature outliers
-        first_5_flagged = sum(
-            1 for r in ensemble_report.per_sample[:5] if r.is_poisoned
-        )
+        first_5_flagged = sum(1 for r in ensemble_report.per_sample[:5] if r.is_poisoned)
         # Feature methods should flag 0-1 of these at most (they're normal points)
         assert first_5_flagged <= 2, (
             f"Feature-space ensemble flagged {first_5_flagged}/5 normal samples. "

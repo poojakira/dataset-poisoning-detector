@@ -83,7 +83,9 @@ class DetectionReport:
     per_sample: list[PoisonResult] = field(default_factory=list)
 
 
-def detect(X: list[list[float]], method: str = "ensemble", labels: list[int] | None = None) -> DetectionReport:
+def detect(
+    X: list[list[float]], method: str = "ensemble", labels: list[int] | None = None
+) -> DetectionReport:
     """Run poisoning detection on a feature matrix.
 
     This is the main entry point. Takes a raw feature matrix and returns
