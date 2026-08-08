@@ -111,7 +111,7 @@ class TestSpectralDetect:
     def test_validation_errors(self):
         """Should raise ValueError for invalid inputs."""
         with pytest.raises(ValueError, match="2-dimensional"):
-            spectral_detect([1, 2, 3], [0, 0, 0])  # 1D input
+            spectral_detect([1, 2, 3], [0, 0, 0])  # type: ignore[arg-type]  # intentional bad type
 
         with pytest.raises(ValueError, match="same length"):
             spectral_detect([[1, 2], [3, 4]], [0])  # length mismatch
