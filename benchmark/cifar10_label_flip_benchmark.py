@@ -102,7 +102,9 @@ def apply_label_flip(y: np.ndarray, contamination_rate: float, random_state: int
     n_to_flip = int(contamination_rate * len(y))
 
     # Randomly select which class 0 samples to flip
-    flip_indices = rng.choice(class_0_indices, size=min(n_to_flip, len(class_0_indices)), replace=False)
+    flip_indices = rng.choice(
+        class_0_indices, size=min(n_to_flip, len(class_0_indices)), replace=False
+    )
     y_poisoned[flip_indices] = 1  # Assign wrong label
 
     return y_poisoned, set(flip_indices.tolist())
@@ -144,9 +146,9 @@ def run_spectral_detection(X, y_poisoned, contamination_rate):
     flagged_iqr = {r.sample_idx for r in report.results if r.is_poisoned}
 
     # Method 2: Percentile-based threshold (detect_label_flips)
-    flagged_percentile = set(detect_label_flips(
-        X, y_poisoned, contamination_estimate=contamination_rate, n_components=1
-    ))
+    flagged_percentile = set(
+        detect_label_flips(X, y_poisoned, contamination_estimate=contamination_rate, n_components=1)
+    )
 
     # Use the percentile-based method as primary (calibrated to contamination rate)
     return flagged_percentile, flagged_iqr
@@ -195,7 +197,9 @@ def main():
 
     for rate in contamination_rates:
         n_poisoned = int(rate * len(y_clean))
-        print(f"[{contamination_rates.index(rate) + 2}/4] Contamination rate: {rate*100:.0f}% ({n_poisoned} samples flipped)")
+        print(
+            f"[{contamination_rates.index(rate) + 2}/4] Contamination rate: {rate*100:.0f}% ({n_poisoned} samples flipped)"
+        )
         print("-" * 50)
 
         # Apply poisoning
@@ -212,10 +216,16 @@ def main():
         spectral_metrics["time_seconds"] = round(spectral_time, 3)
 
         # Also record IQR-based spectral for comparison
-        spectral_iqr_metrics = evaluate_detection(spectral_iqr_flagged, poisoned_indices, len(y_clean))
+        spectral_iqr_metrics = evaluate_detection(
+            spectral_iqr_flagged, poisoned_indices, len(y_clean)
+        )
 
-        print(f"      Spectral (percentile): P={spectral_metrics['precision']:.2f}  R={spectral_metrics['recall']:.2f}  F1={spectral_metrics['f1']:.2f}  ({spectral_metrics['flagged']} flagged)")
-        print(f"      Spectral (IQR):        P={spectral_iqr_metrics['precision']:.2f}  R={spectral_iqr_metrics['recall']:.2f}  F1={spectral_iqr_metrics['f1']:.2f}  ({spectral_iqr_metrics['flagged']} flagged)")
+        print(
+            f"      Spectral (percentile): P={spectral_metrics['precision']:.2f}  R={spectral_metrics['recall']:.2f}  F1={spectral_metrics['f1']:.2f}  ({spectral_metrics['flagged']} flagged)"
+        )
+        print(
+            f"      Spectral (IQR):        P={spectral_iqr_metrics['precision']:.2f}  R={spectral_iqr_metrics['recall']:.2f}  F1={spectral_iqr_metrics['f1']:.2f}  ({spectral_iqr_metrics['flagged']} flagged)"
+        )
 
         # --- Ensemble Detection ---
         t0 = time.time()
@@ -226,12 +236,16 @@ def main():
         ensemble_metrics["method"] = "ensemble (z-score + IQR + IsolationForest)"
         ensemble_metrics["time_seconds"] = round(ensemble_time, 3)
 
-        print(f"      Ensemble:              P={ensemble_metrics['precision']:.2f}  R={ensemble_metrics['recall']:.2f}  F1={ensemble_metrics['f1']:.2f}  ({ensemble_metrics['flagged']} flagged)")
+        print(
+            f"      Ensemble:              P={ensemble_metrics['precision']:.2f}  R={ensemble_metrics['recall']:.2f}  F1={ensemble_metrics['f1']:.2f}  ({ensemble_metrics['flagged']} flagged)"
+        )
 
         # --- Comparison ---
         spectral_wins = spectral_metrics["f1"] > ensemble_metrics["f1"]
         f1_delta = spectral_metrics["f1"] - ensemble_metrics["f1"]
-        print(f"      -> Spectral {'WINS' if spectral_wins else 'loses'} by F1 delta: {f1_delta:+.4f}")
+        print(
+            f"      -> Spectral {'WINS' if spectral_wins else 'loses'} by F1 delta: {f1_delta:+.4f}"
+        )
         print()
 
         rate_key = f"{rate:.2f}"
