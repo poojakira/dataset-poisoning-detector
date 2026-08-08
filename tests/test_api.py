@@ -40,6 +40,7 @@ def test_score_returns_401_when_no_api_key(monkeypatch):
     # Reimport to pick up the env var (module-level _EXPECTED_API_KEY).
     import importlib
     import poison_detector.api as api_module
+
     importlib.reload(api_module)
     client = TestClient(api_module.app)  # no X-API-Key header
     response = client.post("/score", json={"features": [1.0, 2.0, 3.0]})
@@ -51,6 +52,7 @@ def test_score_returns_401_when_wrong_api_key(monkeypatch):
     monkeypatch.setenv("API_KEY", "correct-secret")
     import importlib
     import poison_detector.api as api_module
+
     importlib.reload(api_module)
     client = TestClient(api_module.app, headers={"X-API-Key": "wrong-key"})
     response = client.post("/score", json={"features": [1.0, 2.0, 3.0]})
@@ -62,6 +64,7 @@ def test_health_does_not_require_api_key(monkeypatch):
     monkeypatch.setenv("API_KEY", "test-secret")
     import importlib
     import poison_detector.api as api_module
+
     importlib.reload(api_module)
     client = TestClient(api_module.app)  # no X-API-Key header
     response = client.get("/health")
@@ -106,6 +109,7 @@ def test_score_endpoint_returns_scoring_result(monkeypatch):
     monkeypatch.setenv("API_KEY", "test-secret")
     import importlib
     import poison_detector.api as api_module
+
     importlib.reload(api_module)
     client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
     payload = {"features": [1.0, 2.0, 3.0, 4.0, 5.0]}
@@ -134,6 +138,7 @@ def test_batch_endpoint_handles_multiple_samples(monkeypatch):
     monkeypatch.setenv("API_KEY", "test-secret")
     import importlib
     import poison_detector.api as api_module
+
     importlib.reload(api_module)
     client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
     payload = {
@@ -174,6 +179,7 @@ def test_websocket_stream_receives_events(monkeypatch):
     monkeypatch.setenv("API_KEY", "test-secret")
     import importlib
     import poison_detector.api as api_module
+
     importlib.reload(api_module)
     client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
     with client.websocket_connect("/stream") as ws:
