@@ -32,29 +32,97 @@ Three detection methods, each catching different things:
 
 ## Installation
 
+### Prerequisites
+- Python 3.10 or newer
+- pip (comes with Python)
+- numpy, scikit-learn (installed automatically)
+
+### Install from PyPI
+
+```powershell
+# Windows PowerShell
+py -m pip install dataset-poisoning-detector
+```
+
 ```bash
+# Linux / Mac
 pip install dataset-poisoning-detector
 ```
 
 With real-time streaming support:
 
+```powershell
+# Windows PowerShell
+py -m pip install "dataset-poisoning-detector[realtime]"
+```
+
 ```bash
+# Linux / Mac
 pip install "dataset-poisoning-detector[realtime]"
 ```
 
 With Kafka:
 
+```powershell
+# Windows PowerShell
+py -m pip install "dataset-poisoning-detector[realtime,kafka]"
+```
+
 ```bash
+# Linux / Mac
 pip install "dataset-poisoning-detector[realtime,kafka]"
 ```
 
-From source:
+### Install from source
+
+```powershell
+# Windows PowerShell
+git clone https://github.com/poojakira/dataset-poisoning-detector.git
+cd dataset-poisoning-detector
+py -m pip install -e ".[dev,realtime]"
+```
 
 ```bash
-git clone https://github.com/poojakira/dataset-poisoning-detector
+# Linux / Mac
+git clone https://github.com/poojakira/dataset-poisoning-detector.git
 cd dataset-poisoning-detector
 pip install -e ".[dev,realtime]"
 ```
+
+### Verify installation
+
+```powershell
+# Windows PowerShell
+py -c "from poison_detector import detect, spectral_detect; print('OK')"
+```
+
+```bash
+# Linux / Mac
+python -c "from poison_detector import detect, spectral_detect; print('OK')"
+```
+
+### Run tests
+
+```powershell
+# Windows PowerShell
+py -m pytest tests/ -q
+# Expected: 46 passed
+```
+
+```bash
+# Linux / Mac
+pytest tests/ -q
+# Expected: 46 passed
+```
+
+### Common issues
+
+| Problem | Fix |
+|---------|-----|
+| `py` not recognized (Windows) | Use `python` instead, or install Python from python.org and ensure it's on PATH |
+| `ModuleNotFoundError: No module named 'sklearn'` | Run `py -m pip install scikit-learn>=1.5` |
+| Permission denied on install | Add `--user` flag or run in a virtual environment (`py -m venv .venv && .venv\Scripts\activate`) |
+| numpy build fails on Windows | Install the Visual C++ Build Tools or use `py -m pip install --only-binary :all: numpy` |
 
 ## Basic Usage
 
