@@ -1,0 +1,131 @@
+{
+  "methodology": "Tran et al. (2018) label-flip benchmark setup",
+  "dataset": {
+    "generator": "sklearn.make_classification",
+    "n_samples": 2000,
+    "n_features": 100,
+    "n_informative": 20,
+    "n_redundant": 5,
+    "class_sep": 2.0,
+    "random_state": 2018,
+    "rationale": "Simulates CNN penultimate layer embeddings with well-separated class clusters"
+  },
+  "attack": "random label flip (class 0 -> class 1)",
+  "contamination_rates": [
+    0.05,
+    0.1,
+    0.2
+  ],
+  "spectral_results": {
+    "0.05": {
+      "percentile_threshold": {
+        "precision": 0.08,
+        "recall": 0.08,
+        "f1": 0.08,
+        "flagged": 100,
+        "true_positives": 8,
+        "method": "spectral (percentile threshold)",
+        "time_seconds": 0.579
+      },
+      "iqr_threshold": {
+        "precision": 0.0556,
+        "recall": 0.02,
+        "f1": 0.0294,
+        "flagged": 36,
+        "true_positives": 2
+      }
+    },
+    "0.10": {
+      "percentile_threshold": {
+        "precision": 0.23,
+        "recall": 0.23,
+        "f1": 0.23,
+        "flagged": 200,
+        "true_positives": 46,
+        "method": "spectral (percentile threshold)",
+        "time_seconds": 0.459
+      },
+      "iqr_threshold": {
+        "precision": 0.2162,
+        "recall": 0.04,
+        "f1": 0.0675,
+        "flagged": 37,
+        "true_positives": 8
+      }
+    },
+    "0.20": {
+      "percentile_threshold": {
+        "precision": 0.3675,
+        "recall": 0.3675,
+        "f1": 0.3675,
+        "flagged": 400,
+        "true_positives": 147,
+        "method": "spectral (percentile threshold)",
+        "time_seconds": 0.495
+      },
+      "iqr_threshold": {
+        "precision": 0.2222,
+        "recall": 0.015,
+        "f1": 0.0281,
+        "flagged": 27,
+        "true_positives": 6
+      }
+    }
+  },
+  "ensemble_results": {
+    "0.05": {
+      "precision": 0.0502,
+      "recall": 0.26,
+      "f1": 0.0841,
+      "flagged": 518,
+      "true_positives": 26,
+      "method": "ensemble (z-score + IQR + IsolationForest)",
+      "time_seconds": 1.146
+    },
+    "0.10": {
+      "precision": 0.0985,
+      "recall": 0.255,
+      "f1": 0.1421,
+      "flagged": 518,
+      "true_positives": 51,
+      "method": "ensemble (z-score + IQR + IsolationForest)",
+      "time_seconds": 1.11
+    },
+    "0.20": {
+      "precision": 0.2066,
+      "recall": 0.2675,
+      "f1": 0.2331,
+      "flagged": 518,
+      "true_positives": 107,
+      "method": "ensemble (z-score + IQR + IsolationForest)",
+      "time_seconds": 1.157
+    }
+  },
+  "comparison": {
+    "0.05": {
+      "spectral_f1": 0.08,
+      "ensemble_f1": 0.0841,
+      "f1_delta": -0.0041,
+      "spectral_wins": false
+    },
+    "0.10": {
+      "spectral_f1": 0.23,
+      "ensemble_f1": 0.1421,
+      "f1_delta": 0.0879,
+      "spectral_wins": true
+    },
+    "0.20": {
+      "spectral_f1": 0.3675,
+      "ensemble_f1": 0.2331,
+      "f1_delta": 0.1344,
+      "spectral_wins": true
+    }
+  },
+  "conclusion": "Spectral detection outperforms ensemble on 2/3 contamination rates for label-flip attacks. The ensemble's feature-space methods cannot reliably detect label-only corruptions.",
+  "summary": {
+    "spectral_wins_count": 2,
+    "total_comparisons": 3,
+    "avg_spectral_f1": 0.2258,
+    "avg_ensemble_f1": 0.1531
+  }
+}
