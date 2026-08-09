@@ -35,6 +35,11 @@ from .isolation import IsolationDetector
 from .attribution import feature_attribution
 from .report import format_report, export_json, export_csv
 from .spectral import spectral_detect, detect_label_flips, SpectralReport, SpectralResult
+from .dataset_url_scanner import (
+    scan_hf_dataset,
+    DatasetScanResult,
+    parse_hf_dataset_reference,
+)
 
 __all__ = [
     "PoisonResult",
@@ -51,6 +56,9 @@ __all__ = [
     "detect_label_flips",
     "SpectralReport",
     "SpectralResult",
+    "scan_hf_dataset",
+    "DatasetScanResult",
+    "parse_hf_dataset_reference",
 ]
 
 __version__ = "0.2.0"
