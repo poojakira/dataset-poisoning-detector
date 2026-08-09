@@ -61,10 +61,26 @@ from poison_detector import detect
 import numpy as np
 
 # Generate synthetic training data (1000 samples, 10 features)
-data = np.random.randn(1000, 10)
-results = detect(data, contamination=0.05)
-print(f'Flagged {len(results.flagged_indices)} samples')
-print(f'Scores range: [{results.scores.min():.3f}, {results.scores.max():.3f}]')
+data = np.random.randn(1000, 10).tolist()
+
+# method: 'ensemble' (default), 'zscore', 'iqr', 'isolation', or 'spectral'
+report = detect(data, method='ensemble')
+print(f'Analyzed {report.total_samples} samples')
+print(f'Flagged {report.poisoned_count} as poisoned')
+print(f'Per-method votes: {report.method_scores}')
+"
+```
+
+For label-flip attacks (the only method that detects them), pass labels and
+use the spectral detector:
+```powershell
+.\.venv\Scripts\python.exe -c "
+from poison_detector import detect
+import numpy as np
+data = np.random.randn(200, 10).tolist()
+labels = ([0]*100) + ([1]*100)
+report = detect(data, method='spectral', labels=labels)
+print(f'Spectral flagged {report.poisoned_count}/{report.total_samples}')
 "
 ```
 
