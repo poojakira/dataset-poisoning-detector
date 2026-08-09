@@ -1,0 +1,229 @@
+{
+  "generated_at": "2026-08-08T20:12:09-0700",
+  "dataset": {
+    "type": "synthetic_2_gaussian",
+    "n_samples": 1000,
+    "n_features": 20,
+    "n_classes": 2,
+    "flip_rate": 0.05,
+    "actual_poisoned": 50,
+    "seed": 42
+  },
+  "detection": {
+    "method": "spectral_detect",
+    "n_components": 1,
+    "iqr_multiplier": 1.5,
+    "total_samples": 1000,
+    "samples_flagged": 54,
+    "flag_rate_pct": 5.4,
+    "detection_latency_ms": 9.1
+  },
+  "quality": {
+    "true_positives": 50,
+    "false_positives": 4,
+    "false_negatives": 0,
+    "precision": 0.9259,
+    "recall": 1.0,
+    "false_positive_rate": 0.0042
+  },
+  "per_class": {
+    "0": {
+      "size": 500,
+      "flagged": 26,
+      "threshold": 3.013877,
+      "mean_score": 1.29117,
+      "max_score": 10.144433,
+      "explained_variance_ratio": 0.1989
+    },
+    "1": {
+      "size": 500,
+      "flagged": 28,
+      "threshold": 2.853778,
+      "mean_score": 1.278607,
+      "max_score": 10.681931,
+      "explained_variance_ratio": 0.2107
+    }
+  },
+  "top_flagged_samples": [
+    {
+      "sample_idx": 350,
+      "label": 1,
+      "projection_score": 10.681931,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 1
+    },
+    {
+      "sample_idx": 113,
+      "label": 1,
+      "projection_score": 10.390822,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 2
+    },
+    {
+      "sample_idx": 553,
+      "label": 0,
+      "projection_score": 10.144433,
+      "threshold": 3.013877,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 1
+    },
+    {
+      "sample_idx": 282,
+      "label": 1,
+      "projection_score": 10.074428,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 3
+    },
+    {
+      "sample_idx": 827,
+      "label": 0,
+      "projection_score": 9.925636,
+      "threshold": 3.013877,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 2
+    },
+    {
+      "sample_idx": 251,
+      "label": 1,
+      "projection_score": 9.884224,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 4
+    },
+    {
+      "sample_idx": 995,
+      "label": 0,
+      "projection_score": 9.879057,
+      "threshold": 3.013877,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 3
+    },
+    {
+      "sample_idx": 957,
+      "label": 0,
+      "projection_score": 9.798064,
+      "threshold": 3.013877,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 4
+    },
+    {
+      "sample_idx": 73,
+      "label": 1,
+      "projection_score": 9.703357,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 5
+    },
+    {
+      "sample_idx": 243,
+      "label": 1,
+      "projection_score": 9.531106,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 6
+    },
+    {
+      "sample_idx": 849,
+      "label": 0,
+      "projection_score": 9.519355,
+      "threshold": 3.013877,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 5
+    },
+    {
+      "sample_idx": 74,
+      "label": 1,
+      "projection_score": 9.483841,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 7
+    },
+    {
+      "sample_idx": 671,
+      "label": 0,
+      "projection_score": 9.312346,
+      "threshold": 3.013877,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 6
+    },
+    {
+      "sample_idx": 455,
+      "label": 1,
+      "projection_score": 9.297892,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 8
+    },
+    {
+      "sample_idx": 729,
+      "label": 0,
+      "projection_score": 9.181355,
+      "threshold": 3.013877,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 7
+    },
+    {
+      "sample_idx": 10,
+      "label": 1,
+      "projection_score": 9.018205,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 9
+    },
+    {
+      "sample_idx": 190,
+      "label": 1,
+      "projection_score": 8.98378,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 10
+    },
+    {
+      "sample_idx": 522,
+      "label": 0,
+      "projection_score": 8.909031,
+      "threshold": 3.013877,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 8
+    },
+    {
+      "sample_idx": 206,
+      "label": 1,
+      "projection_score": 8.881894,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 11
+    },
+    {
+      "sample_idx": 8,
+      "label": 1,
+      "projection_score": 8.859852,
+      "threshold": 2.853778,
+      "is_poisoned": true,
+      "actually_poisoned": true,
+      "rank_in_class": 12
+    }
+  ]
+}

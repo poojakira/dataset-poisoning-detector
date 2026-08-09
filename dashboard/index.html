@@ -85,17 +85,6 @@
         .status-active { background: #0d2818; color: #3fb950; border: 1px solid #238636; }
         .status-inactive { background: #1c1e24; color: #8b949e; border: 1px solid #30363d; }
         .status-degraded { background: #2a1e00; color: #d29922; border: 1px solid #9e6a03; }
-        .detector-list { list-style: none; }
-        .detector-list li {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 9px 0;
-            border-bottom: 1px solid #21262d;
-        }
-        .detector-list li:last-child { border-bottom: none; }
-        .detector-name { font-size: 0.88rem; }
-        .detector-tech { color: #8b949e; font-size: 0.75rem; margin-top: 2px; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -127,175 +116,147 @@
             height: 100%;
             border-radius: 4px;
         }
-        .drift-chart {
-            width: 100%;
-            height: 140px;
-            position: relative;
-            margin-top: 10px;
-        }
-        .drift-canvas { width: 100%; height: 100%; }
-        .chart-label {
-            position: absolute;
-            font-size: 0.7rem;
-            color: #8b949e;
-        }
+        .full-width { grid-column: 1 / -1; }
         .timestamp {
             text-align: center;
             color: #484f58;
             font-size: 0.75rem;
             margin-top: 20px;
         }
-        .full-width { grid-column: 1 / -1; }
-        .triage-controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 12px;
-            align-items: center;
+        .error-msg {
+            background: #1c1e24;
+            border: 1px solid #f85149;
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 24px;
+            font-size: 0.85rem;
+            color: #f85149;
+            display: none;
         }
-        .triage-controls select, .triage-controls input {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            color: #c9d1d9;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 0.82rem;
+        .data-source {
+            text-align: center;
+            color: #3fb950;
+            font-size: 0.75rem;
+            margin-top: 8px;
         }
-        .refresh-btn {
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #58a6ff;
-            padding: 6px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.82rem;
-        }
-        .refresh-btn:hover { background: #30363d; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>&#x1f6e1; Dataset Poisoning Detector — Monitoring Dashboard</h1>
-        <p class="subtitle">Real-time detection pipeline monitoring for ML training data integrity</p>
+        <p class="subtitle">Spectral signature detection results on synthetic poisoned dataset</p>
     </div>
 
     <div class="disclaimer">
-        <strong>&#9888; Honest Performance Disclaimer:</strong>
-        On a real CIFAR-10 label-flip benchmark, this detector achieves ROC-AUC of approximately
-        <code>0.53–0.56</code> across flip rates — only modestly above random chance (0.50).
-        Measured false positive rate is roughly <code>~5%</code>. This tool is best used as one
-        signal in a defense-in-depth pipeline, not as a sole decision-maker.
-        Flagged samples require manual triage.
+        <strong>&#9888; Data Source:</strong>
+        All metrics on this dashboard come from a <strong>real spectral_detect run</strong>
+        on a reproducible synthetic dataset (2 Gaussian clusters, 20 features, 5% label flips, seed=42).
+        Run <code>py scripts/generate_dashboard_data.py</code> to regenerate.
+        This detector is best used as one signal in a defense-in-depth pipeline, not as a sole decision-maker.
     </div>
+
+    <div class="error-msg" id="error-msg"></div>
 
     <div class="grid">
         <!-- Detection Metrics Card -->
         <div class="card">
             <h2><span class="icon">&#x1f4ca;</span> Detection Metrics</h2>
             <div class="metric-row">
-                <span class="metric-label">ROC-AUC (CIFAR-10 benchmark)</span>
-                <span class="metric-value warn" id="roc-auc">0.54</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">False Positive Rate</span>
-                <span class="metric-value" id="fpr">4.8%</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">Samples Processed</span>
-                <span class="metric-value ok" id="samples-processed">48,231</span>
+                <span class="metric-label">Samples Analyzed</span>
+                <span class="metric-value ok" id="samples-analyzed">—</span>
             </div>
             <div class="metric-row">
                 <span class="metric-label">Samples Flagged</span>
-                <span class="metric-value warn" id="samples-flagged">2,315</span>
+                <span class="metric-value warn" id="samples-flagged">—</span>
             </div>
             <div class="metric-row">
                 <span class="metric-label">Flag Rate</span>
-                <span class="metric-value" id="flag-rate">4.8%</span>
+                <span class="metric-value" id="flag-rate">—</span>
             </div>
             <div class="metric-row">
-                <span class="metric-label">Avg Scoring Latency</span>
-                <span class="metric-value ok" id="avg-latency">2.3 ms</span>
+                <span class="metric-label">Detection Latency</span>
+                <span class="metric-value ok" id="detection-latency">—</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Actual Poisoned in Dataset</span>
+                <span class="metric-value" id="actual-poisoned">—</span>
             </div>
         </div>
 
-        <!-- Pipeline Status Card -->
+        <!-- Detection Quality Card -->
         <div class="card">
-            <h2><span class="icon">&#x2699;</span> Detector Pipeline Status</h2>
-            <ul class="detector-list" id="detector-list">
-            </ul>
+            <h2><span class="icon">&#x2699;</span> Detection Quality</h2>
+            <div class="metric-row">
+                <span class="metric-label">True Positives</span>
+                <span class="metric-value ok" id="true-positives">—</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">False Positives</span>
+                <span class="metric-value warn" id="false-positives">—</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">False Negatives</span>
+                <span class="metric-value" id="false-negatives">—</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Precision</span>
+                <span class="metric-value ok" id="precision">—</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Recall</span>
+                <span class="metric-value ok" id="recall">—</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">False Positive Rate</span>
+                <span class="metric-value" id="fpr">—</span>
+            </div>
         </div>
 
-        <!-- Drift Monitoring Card -->
+        <!-- Per-Class Stats Card -->
         <div class="card">
-            <h2><span class="icon">&#x1f4c8;</span> Distribution Drift Monitor</h2>
-            <div class="metric-row">
-                <span class="metric-label">Current Drift Score</span>
-                <span class="metric-value" id="drift-current">0.031</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">Alert Threshold</span>
-                <span class="metric-value">0.10</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">Baseline Size</span>
-                <span class="metric-value" id="baseline-size">10,000</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">Status</span>
-                <span class="status-badge status-active" id="drift-status">STABLE</span>
-            </div>
-            <div class="drift-chart">
-                <canvas id="drift-canvas" class="drift-canvas"></canvas>
+            <h2><span class="icon">&#x1f4c8;</span> Per-Class Spectral Analysis</h2>
+            <div id="per-class-stats">
+                <p style="color:#8b949e;font-size:0.85rem">Loading...</p>
             </div>
         </div>
 
-        <!-- Throughput Card -->
+        <!-- Dataset Info Card -->
         <div class="card">
-            <h2><span class="icon">&#x26a1;</span> Throughput &amp; Queue</h2>
+            <h2><span class="icon">&#x26a1;</span> Dataset Configuration</h2>
             <div class="metric-row">
-                <span class="metric-label">Processing Rate</span>
-                <span class="metric-value ok" id="proc-rate">142 samples/sec</span>
+                <span class="metric-label">Dataset Type</span>
+                <span class="metric-value" id="dataset-type">—</span>
             </div>
             <div class="metric-row">
-                <span class="metric-label">Detection Rate</span>
-                <span class="metric-value" id="det-rate">6.8 flags/sec</span>
+                <span class="metric-label">Features</span>
+                <span class="metric-value" id="n-features">—</span>
             </div>
             <div class="metric-row">
-                <span class="metric-label">Queue Depth</span>
-                <span class="metric-value" id="queue-depth">12</span>
+                <span class="metric-label">Classes</span>
+                <span class="metric-value" id="n-classes">—</span>
             </div>
             <div class="metric-row">
-                <span class="metric-label">Uptime</span>
-                <span class="metric-value ok" id="uptime">4h 23m</span>
+                <span class="metric-label">Flip Rate</span>
+                <span class="metric-value" id="flip-rate">—</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Random Seed</span>
+                <span class="metric-value" id="seed">—</span>
             </div>
         </div>
 
         <!-- Sample Triage View (full width) -->
         <div class="card full-width">
-            <h2><span class="icon">&#x1f50d;</span> Sample Triage — Flagged Samples</h2>
-            <div class="triage-controls">
-                <select id="sort-select">
-                    <option value="score-desc">Score (High → Low)</option>
-                    <option value="score-asc">Score (Low → High)</option>
-                    <option value="time-desc">Most Recent</option>
-                </select>
-                <select id="detector-filter">
-                    <option value="all">All Detectors</option>
-                    <option value="statistical">Statistical</option>
-                    <option value="isolation">Isolation Forest</option>
-                    <option value="fingerprint">Fingerprint</option>
-                    <option value="drift">Drift</option>
-                </select>
-                <button class="refresh-btn" onclick="refreshTriage()">&#x21bb; Refresh</button>
-            </div>
+            <h2><span class="icon">&#x1f50d;</span> Top Flagged Samples (by spectral projection score)</h2>
             <table>
                 <thead>
                     <tr>
-                        <th>Sample ID</th>
-                        <th>Anomaly Score</th>
-                        <th>Detector</th>
-                        <th>ATT&amp;CK Technique</th>
-                        <th>Timestamp</th>
-                        <th>Status</th>
+                        <th>Sample Index</th>
+                        <th>Projection Score</th>
+                        <th>Threshold</th>
+                        <th>Assigned Label</th>
+                        <th>Actually Poisoned</th>
+                        <th>Rank in Class</th>
                     </tr>
                 </thead>
                 <tbody id="triage-table">
@@ -304,200 +265,119 @@
         </div>
     </div>
 
-    <div class="timestamp" id="last-updated">Last updated: --</div>
+    <div class="data-source" id="data-source"></div>
+    <div class="timestamp" id="last-updated">Loading data...</div>
 
     <script>
-    // Simulated detector pipeline state
-    const detectors = [
-        { name: "Statistical Outlier", module: "statistical.py", status: "active", technique: "T1685 — Data Poisoning" },
-        { name: "Isolation Forest", module: "isolation.py", status: "active", technique: "T1685 — Data Poisoning" },
-        { name: "Fingerprint Analyzer", module: "fingerprint.py", status: "active", technique: "T1688 — Safe Mode Boot" },
-        { name: "Concept Drift", module: "drift.py", status: "active", technique: "T1685 — Data Poisoning" },
-        { name: "Spectral Signature", module: "detector.py", status: "degraded", technique: "T1685 — Label Flip" },
-    ];
-
-    // Render detector list
-    function renderDetectors() {
-        const list = document.getElementById("detector-list");
-        list.innerHTML = detectors.map(d => {
-            const statusClass = d.status === "active" ? "status-active" :
-                               d.status === "degraded" ? "status-degraded" : "status-inactive";
-            const statusLabel = d.status.toUpperCase();
-            return `<li>
-                <div>
-                    <div class="detector-name">${d.name} <span style="color:#484f58">(${d.module})</span></div>
-                    <div class="detector-tech">${d.technique}</div>
-                </div>
-                <span class="status-badge ${statusClass}">${statusLabel}</span>
-            </li>`;
-        }).join("");
+    async function loadDashboard() {
+        try {
+            const response = await fetch("data.json");
+            if (!response.ok) {
+                throw new Error(`Failed to load data.json: ${response.status} ${response.statusText}`);
+            }
+            const data = await response.json();
+            renderDashboard(data);
+        } catch (err) {
+            const errorEl = document.getElementById("error-msg");
+            errorEl.style.display = "block";
+            errorEl.textContent = `Error loading dashboard data: ${err.message}. Run "py scripts/generate_dashboard_data.py" to generate data.json.`;
+            document.getElementById("last-updated").textContent = "Data load failed";
+        }
     }
 
-    // Simulated flagged samples for triage
-    const flaggedSamples = [
-        { id: "img_04821", score: 0.89, detector: "Statistical", technique: "T1685", time: "19:34:12", status: "Pending" },
-        { id: "img_12044", score: 0.82, detector: "Isolation Forest", technique: "T1685", time: "19:33:58", status: "Pending" },
-        { id: "img_07293", score: 0.76, detector: "Fingerprint", technique: "T1688", time: "19:33:41", status: "Reviewing" },
-        { id: "img_31002", score: 0.71, detector: "Statistical", technique: "T1685", time: "19:32:55", status: "Pending" },
-        { id: "img_09418", score: 0.68, detector: "Drift", technique: "T1685", time: "19:32:20", status: "Pending" },
-        { id: "img_22150", score: 0.64, detector: "Isolation Forest", technique: "T1685", time: "19:31:47", status: "Dismissed" },
-        { id: "img_00573", score: 0.61, detector: "Statistical", technique: "T1685", time: "19:31:02", status: "Pending" },
-        { id: "img_18396", score: 0.58, detector: "Fingerprint", technique: "T1688", time: "19:30:33", status: "Confirmed" },
-        { id: "img_44120", score: 0.55, detector: "Drift", technique: "T1685", time: "19:29:48", status: "Pending" },
-        { id: "img_06887", score: 0.52, detector: "Statistical", technique: "T1685", time: "19:29:11", status: "Pending" },
-    ];
+    function renderDashboard(data) {
+        // Detection Metrics
+        document.getElementById("samples-analyzed").textContent =
+            data.detection.total_samples.toLocaleString();
+        document.getElementById("samples-flagged").textContent =
+            data.detection.samples_flagged.toLocaleString();
+        document.getElementById("flag-rate").textContent =
+            data.detection.flag_rate_pct + "%";
+        document.getElementById("detection-latency").textContent =
+            data.detection.detection_latency_ms + " ms";
+        document.getElementById("actual-poisoned").textContent =
+            data.dataset.actual_poisoned.toLocaleString();
 
-    function getScoreColor(score) {
-        if (score >= 0.8) return "#f85149";
-        if (score >= 0.65) return "#d29922";
-        return "#8b949e";
-    }
+        // Detection Quality
+        document.getElementById("true-positives").textContent = data.quality.true_positives;
+        document.getElementById("false-positives").textContent = data.quality.false_positives;
+        document.getElementById("false-negatives").textContent = data.quality.false_negatives;
+        document.getElementById("precision").textContent = data.quality.precision.toFixed(4);
+        document.getElementById("recall").textContent = data.quality.recall.toFixed(4);
+        document.getElementById("fpr").textContent = data.quality.false_positive_rate.toFixed(4);
 
-    function getStatusBadge(status) {
-        const map = {
-            "Pending": "status-degraded",
-            "Reviewing": "status-active",
-            "Confirmed": "status-active",
-            "Dismissed": "status-inactive",
-        };
-        return `<span class="status-badge ${map[status] || 'status-inactive'}">${status}</span>`;
-    }
+        // Dataset Info
+        document.getElementById("dataset-type").textContent = data.dataset.type;
+        document.getElementById("n-features").textContent = data.dataset.n_features;
+        document.getElementById("n-classes").textContent = data.dataset.n_classes;
+        document.getElementById("flip-rate").textContent = (data.dataset.flip_rate * 100) + "%";
+        document.getElementById("seed").textContent = data.dataset.seed;
 
-    function renderTriage() {
+        // Per-Class Stats
+        const perClassEl = document.getElementById("per-class-stats");
+        let perClassHTML = "";
+        for (const [classLabel, stats] of Object.entries(data.per_class)) {
+            perClassHTML += `
+                <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #21262d;">
+                    <div style="font-weight:600;color:#58a6ff;margin-bottom:6px;">Class ${classLabel}</div>
+                    <div class="metric-row">
+                        <span class="metric-label">Samples</span>
+                        <span class="metric-value">${stats.size}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Flagged</span>
+                        <span class="metric-value warn">${stats.flagged}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Threshold</span>
+                        <span class="metric-value">${stats.threshold.toFixed(4)}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mean Score</span>
+                        <span class="metric-value">${stats.mean_score.toFixed(4)}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Max Score</span>
+                        <span class="metric-value">${stats.max_score.toFixed(4)}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Explained Var Ratio</span>
+                        <span class="metric-value">${stats.explained_variance_ratio.toFixed(4)}</span>
+                    </div>
+                </div>`;
+        }
+        perClassEl.innerHTML = perClassHTML;
+
+        // Triage Table
         const tbody = document.getElementById("triage-table");
-        tbody.innerHTML = flaggedSamples.map(s => {
-            const barColor = getScoreColor(s.score);
-            const barWidth = Math.round(s.score * 100);
+        tbody.innerHTML = data.top_flagged_samples.map(s => {
+            const maxScore = data.top_flagged_samples[0].projection_score;
+            const barWidth = Math.round((s.projection_score / maxScore) * 100);
+            const barColor = s.is_poisoned ? "#f85149" : "#8b949e";
+            const poisonedBadge = s.actually_poisoned
+                ? '<span class="status-badge status-degraded">TRUE POISON</span>'
+                : '<span class="status-badge status-inactive">CLEAN</span>';
             return `<tr>
-                <td style="font-family:monospace;color:#58a6ff">${s.id}</td>
+                <td style="font-family:monospace;color:#58a6ff">${s.sample_idx}</td>
                 <td>
                     <span class="score-bar-bg"><span class="score-bar-fill" style="width:${barWidth}%;background:${barColor}"></span></span>
-                    <span style="color:${barColor}">${s.score.toFixed(2)}</span>
+                    <span style="color:${barColor}">${s.projection_score.toFixed(4)}</span>
                 </td>
-                <td>${s.detector}</td>
-                <td style="color:#8b949e;font-family:monospace;font-size:0.78rem">${s.technique}</td>
-                <td style="color:#8b949e">${s.time}</td>
-                <td>${getStatusBadge(s.status)}</td>
+                <td style="color:#8b949e">${s.threshold.toFixed(4)}</td>
+                <td>${s.label}</td>
+                <td>${poisonedBadge}</td>
+                <td style="color:#8b949e">#${s.rank_in_class}</td>
             </tr>`;
         }).join("");
-    }
 
-    function refreshTriage() {
-        renderTriage();
-        updateTimestamp();
-    }
-
-    // Drift chart rendering
-    function drawDriftChart() {
-        const canvas = document.getElementById("drift-canvas");
-        const ctx = canvas.getContext("2d");
-        const rect = canvas.parentElement.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-
-        const w = canvas.width;
-        const h = canvas.height;
-        const padding = { top: 10, right: 10, bottom: 25, left: 40 };
-        const chartW = w - padding.left - padding.right;
-        const chartH = h - padding.top - padding.bottom;
-
-        // Simulated drift scores over last 60 minutes
-        const driftData = [];
-        for (let i = 0; i < 60; i++) {
-            const base = 0.02 + Math.sin(i * 0.1) * 0.015;
-            const noise = (Math.random() - 0.5) * 0.01;
-            driftData.push(Math.max(0, base + noise + (i > 45 ? 0.015 : 0)));
-        }
-
-        const maxVal = 0.12;
-        const threshold = 0.10;
-
-        // Background
-        ctx.fillStyle = "#0d1117";
-        ctx.fillRect(0, 0, w, h);
-
-        // Grid lines
-        ctx.strokeStyle = "#21262d";
-        ctx.lineWidth = 1;
-        for (let i = 0; i <= 4; i++) {
-            const y = padding.top + (chartH / 4) * i;
-            ctx.beginPath();
-            ctx.moveTo(padding.left, y);
-            ctx.lineTo(w - padding.right, y);
-            ctx.stroke();
-        }
-
-        // Threshold line
-        const threshY = padding.top + chartH * (1 - threshold / maxVal);
-        ctx.strokeStyle = "#f8514966";
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([5, 4]);
-        ctx.beginPath();
-        ctx.moveTo(padding.left, threshY);
-        ctx.lineTo(w - padding.right, threshY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Threshold label
-        ctx.fillStyle = "#f85149";
-        ctx.font = "10px sans-serif";
-        ctx.fillText("threshold", w - padding.right - 52, threshY - 4);
-
-        // Data line
-        ctx.strokeStyle = "#58a6ff";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let i = 0; i < driftData.length; i++) {
-            const x = padding.left + (i / (driftData.length - 1)) * chartW;
-            const y = padding.top + chartH * (1 - driftData[i] / maxVal);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-
-        // Y-axis labels
-        ctx.fillStyle = "#8b949e";
-        ctx.font = "10px sans-serif";
-        ctx.textAlign = "right";
-        for (let i = 0; i <= 4; i++) {
-            const val = (maxVal / 4) * (4 - i);
-            const y = padding.top + (chartH / 4) * i;
-            ctx.fillText(val.toFixed(2), padding.left - 5, y + 3);
-        }
-
-        // X-axis labels
-        ctx.textAlign = "center";
-        ctx.fillText("-60m", padding.left, h - 5);
-        ctx.fillText("-30m", padding.left + chartW / 2, h - 5);
-        ctx.fillText("now", w - padding.right, h - 5);
-    }
-
-    // Update timestamp
-    function updateTimestamp() {
-        const now = new Date();
+        // Timestamps
+        document.getElementById("data-source").textContent =
+            `Data generated by spectral_detect (method: ${data.detection.method}, components: ${data.detection.n_components}, IQR multiplier: ${data.detection.iqr_multiplier})`;
         document.getElementById("last-updated").textContent =
-            "Last updated: " + now.toLocaleString();
+            "Data generated: " + data.generated_at;
     }
 
-    // Initialize dashboard
-    function init() {
-        renderDetectors();
-        renderTriage();
-        drawDriftChart();
-        updateTimestamp();
-
-        // Simulate live updates every 5s
-        setInterval(() => {
-            const processed = document.getElementById("samples-processed");
-            const current = parseInt(processed.textContent.replace(/,/g, ""));
-            const added = Math.floor(Math.random() * 50) + 20;
-            processed.textContent = (current + added).toLocaleString();
-            updateTimestamp();
-        }, 5000);
-    }
-
-    window.addEventListener("load", init);
-    window.addEventListener("resize", drawDriftChart);
+    window.addEventListener("load", loadDashboard);
     </script>
 </body>
 </html>
