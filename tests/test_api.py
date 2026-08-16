@@ -14,6 +14,7 @@ pytest.importorskip("fastapi", reason="FastAPI optional dependency not installed
 pytest.importorskip("httpx", reason="httpx (TestClient dependency) not installed")
 
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from poison_detector.api import app
 
@@ -69,6 +70,36 @@ def test_health_does_not_require_api_key(monkeypatch):
     client = TestClient(api_module.app)  # no X-API-Key header
     response = client.get("/health")
     assert response.status_code == 200
+
+
+def test_websocket_stream_returns_1008_when_no_api_key(monkeypatch):
+    """WebSocket /stream must reject upgrades without X-API-Key."""
+    monkeypatch.setenv("API_KEY", "test-secret")
+    import importlib
+    import poison_detector.api as api_module
+
+    importlib.reload(api_module)
+    client = TestClient(api_module.app)
+
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with client.websocket_connect("/stream"):
+            pass
+    assert exc.value.code == 1008
+
+
+def test_websocket_stream_returns_1008_when_wrong_api_key(monkeypatch):
+    """WebSocket /stream must reject upgrades with an invalid X-API-Key."""
+    monkeypatch.setenv("API_KEY", "test-secret")
+    import importlib
+    import poison_detector.api as api_module
+
+    importlib.reload(api_module)
+    client = TestClient(api_module.app, headers={"X-API-Key": "wrong-key"})
+
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with client.websocket_connect("/stream"):
+            pass
+    assert exc.value.code == 1008
 
 
 # ---------------------------------------------------------------------------
