@@ -43,6 +43,7 @@ Security Notes:
 from __future__ import annotations
 
 import asyncio
+import hmac
 import os
 import time
 import traceback
@@ -266,6 +267,13 @@ _UNAUTHENTICATED_PATHS = frozenset({"/health", "/stats", "/metrics"})
 _EXPECTED_API_KEY: str = os.environ.get("API_KEY", "")
 
 
+def _is_valid_api_key(provided_key: str) -> bool:
+    """Return whether a provided API key is configured and valid."""
+    return bool(
+        _EXPECTED_API_KEY and provided_key and hmac.compare_digest(provided_key, _EXPECTED_API_KEY)
+    )
+
+
 @app.middleware("http")
 async def api_key_auth_middleware(request: Request, call_next: Any) -> Any:
     """Enforce X-API-Key authentication on all non-monitoring endpoints.
@@ -282,8 +290,6 @@ async def api_key_auth_middleware(request: Request, call_next: Any) -> Any:
         - WebSocket /stream endpoint requires the X-API-Key header in the
           initial HTTP upgrade request.
     """
-    import hmac
-
     if request.url.path in _UNAUTHENTICATED_PATHS:
         return await call_next(request)
 
@@ -295,7 +301,7 @@ async def api_key_auth_middleware(request: Request, call_next: Any) -> Any:
 
     provided_key = request.headers.get("X-API-Key", "")
     # Use hmac.compare_digest to prevent timing attacks.
-    if not provided_key or not hmac.compare_digest(provided_key, _EXPECTED_API_KEY):
+    if not _is_valid_api_key(provided_key):
         return JSONResponse(
             status_code=401,
             content={"detail": "Unauthorized. Provide a valid X-API-Key header."},
@@ -494,6 +500,10 @@ async def websocket_stream(websocket: WebSocket) -> None:
         {"event": "poison_detected", "score": 0.85, "method_votes": {...}}
         {"event": "batch_scored", "total_samples": 100, "poisoned_count": 5}
     """
+    if not _is_valid_api_key(websocket.headers.get("X-API-Key", "")):
+        await websocket.close(code=1008, reason="Unauthorized")
+        return
+
     await _ws_manager.connect(websocket)
     try:
         while True:
