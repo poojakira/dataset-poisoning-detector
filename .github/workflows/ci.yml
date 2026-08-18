@@ -143,13 +143,11 @@ jobs:
       # actions/checkout@v4 pinned to immutable SHA (2026-08-06)
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      # github/codeql-action/init@v3 pinned to immutable SHA (2026-08-06)
-      - uses: github/codeql-action/init@c4dd10e44af883a891fe31ced449bcb4a6728b9b
+      - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           queries: +security-and-quality
 
-      # github/codeql-action/analyze@v3 pinned to immutable SHA (2026-08-06)
-      - uses: github/codeql-action/analyze@c4dd10e44af883a891fe31ced449bcb4a6728b9b
+      - uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
