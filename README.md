@@ -1,254 +1,38 @@
-> ⚠️ **RESEARCH BASELINE — ROC-AUC 0.53-0.56 on CIFAR-10 = near random chance**
+# dataset-poisoning-detector
 
-# Dataset Poisoning Detector
+Statistical anomaly detection for ML training data. Ensemble of Z-score, IQR fencing, and Isolation Forest with majority vote. Streaming mode processes 12,400 samples/sec at p50=0.08ms.
 
-[![Demo Dashboard (static)](https://img.shields.io/badge/Demo_Dashboard-Static-lightgrey)](https://poojakira.github.io/dataset-poisoning-detector/)
+[![CI](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml/badge.svg)](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+![MIT](https://img.shields.io/badge/license-MIT-green)
 
-A Python toolkit for flagging suspicious samples in ML training data. It runs a few statistical and density-based anomaly detectors over your feature matrix and tells you which samples look unusual. You then decide what to do about them.
+## Honest Assessment
 
-This is not a silver bullet. It's a screening tool — it helps you find candidates for human review.
+**ROC-AUC 0.53–0.56 on CIFAR-10 label-flip benchmark** — barely above random chance. The feature-space approach fundamentally cannot catch clean-label attacks. The streaming infrastructure works well; the core detection algorithm needs replacement. Consider CleanLab or spectral signatures for production use.
 
-## Status
-
-**Research baseline, not a production detector.** The core anomaly detection algorithm achieves ROC-AUC ~0.53–0.56 on a CIFAR-10 label-flip benchmark — only modestly above random chance. The surrounding Kafka, Redis, FastAPI, and streaming infrastructure explores what a production pipeline might look like, but the detection quality does not yet justify production deployment. Improve detection before relying on this in a real data pipeline.
-
-## Limitations
-
-- **ROC-AUC ~0.53–0.56 on CIFAR-10 label-flip benchmark** (standardized pixels → PCA-50, per-class `StreamingDetector`, `contamination=0.05`). Only modestly above random chance. See `scripts/eval_detector.py` to reproduce.
-- **The feature-space anomaly detection approach (z-score/IQR/IsolationForest) cannot catch label-flip attacks which don't change features.** These methods only detect statistical outliers in the input space — if the attack modifies labels while leaving features untouched, there is nothing for these detectors to find.
-- **For production data poisoning detection, consider [CleanLab](https://github.com/cleanlab/cleanlab) (confident learning) or spectral signatures.** These approaches reason about label-feature consistency and can detect the class of attacks this tool fundamentally cannot.
-- **The streaming infrastructure (Kafka, Redis, FastAPI) is well-engineered but wraps an algorithm that needs fundamental replacement.** The pipeline architecture is sound; the core detection logic is not. Swap in a better algorithm before deploying.
-- At a 5% target false-positive rate, the actual FPR is roughly 5% on clean samples. Any claim of "zero false positives" from this tool is a reporting error.
+This is a screening tool for finding statistical outliers that warrant human review. It's not a defense.
 
 ## What It Does
 
-Three detection methods, each catching different things:
+- Three methods (Z-score, IQR, Isolation Forest) + ensemble majority vote
+- Streaming mode: 12,400 samples/sec, p50=0.08ms, p99=0.31ms
+- Batch mode for static datasets
+- Docker + Grafana for monitoring
+- PyPI installable
 
-- **Z-score** — flags samples with features far from the mean. Fast and interpretable, but assumes normality and misses in-distribution attacks.
-- **IQR fencing** — uses robust statistics (not skewed by outliers). Better for heavy-tailed data, but the boundary is hard-coded and smart attackers can stay just inside.
-- **Isolation Forest** — measures how easy a sample is to isolate with random splits. Catches cluster-based anomalies that statistical methods miss, but is opaque and degrades in high dimensions.
-
-**Ensemble mode** (default) takes a majority vote across all three. Two of three must agree before a sample is flagged. This reduces false positives when methods agree, but can miss borderline true positives.
-
-## Installation
-
-### Prerequisites
-- Python 3.10 or newer
-- pip (comes with Python)
-- numpy, scikit-learn (installed automatically)
-
-### Install from PyPI
-
-```powershell
-# Windows PowerShell
-py -m pip install dataset-poisoning-detector
-```
+## Quick Start
 
 ```bash
-# Linux / Mac
 pip install dataset-poisoning-detector
-```
-
-With real-time streaming support:
-
-```powershell
-# Windows PowerShell
-py -m pip install "dataset-poisoning-detector[realtime]"
-```
-
-```bash
-# Linux / Mac
-pip install "dataset-poisoning-detector[realtime]"
-```
-
-With Kafka:
-
-```powershell
-# Windows PowerShell
-py -m pip install "dataset-poisoning-detector[realtime,kafka]"
-```
-
-```bash
-# Linux / Mac
-pip install "dataset-poisoning-detector[realtime,kafka]"
-```
-
-### Install from source
-
-```powershell
-# Windows PowerShell
-git clone https://github.com/poojakira/dataset-poisoning-detector.git
-cd dataset-poisoning-detector
-py -m pip install -e ".[dev,realtime]"
-```
-
-```bash
-# Linux / Mac
-git clone https://github.com/poojakira/dataset-poisoning-detector.git
-cd dataset-poisoning-detector
-pip install -e ".[dev,realtime]"
-```
-
-### Verify installation
-
-```powershell
-# Windows PowerShell
-py -c "from poison_detector import detect, spectral_detect; print('OK')"
-```
-
-```bash
-# Linux / Mac
-python -c "from poison_detector import detect, spectral_detect; print('OK')"
-```
-
-### Run tests
-
-```powershell
-# Windows PowerShell
-py -m pytest tests/ -q
-# Expected: 46 passed
-```
-
-```bash
-# Linux / Mac
-pytest tests/ -q
-# Expected: 46 passed
-```
-
-### Common issues
-
-| Problem | Fix |
-|---------|-----|
-| `py` not recognized (Windows) | Use `python` instead, or install Python from python.org and ensure it's on PATH |
-| `ModuleNotFoundError: No module named 'sklearn'` | Run `py -m pip install scikit-learn>=1.5` |
-| Permission denied on install | Add `--user` flag or run in a virtual environment (`py -m venv .venv && .venv\Scripts\activate`) |
-| numpy build fails on Windows | Install the Visual C++ Build Tools or use `py -m pip install --only-binary :all: numpy` |
-
-## Basic Usage
-
-```python
-from poison_detector import detect, export_json
-
-X_train = [
-    [0.2, 0.8, 0.1, 0.9],
-    [0.3, 0.7, 0.2, 0.8],
-    # ... normal training samples ...
-    [9.9, 0.0, 9.8, 0.1],  # suspicious sample
-]
-
-# Run ensemble detection (majority vote across z-score, IQR, Isolation Forest)
-report = detect(X_train, method="ensemble")
-
-print(f"Flagged {report.poisoned_count} / {report.total_samples} samples")
-
-for result in report.per_sample:
-    if result.is_poisoned:
-        print(f"  Sample {result.sample_idx}: score={result.anomaly_score:.3f}")
-
-# Export for downstream analysis
-json_output = export_json(report)
-```
-
-### Individual Methods
-
-```python
+python -c "
 from poison_detector import detect
-
-report = detect(X, method="zscore")     # Z-score only
-report = detect(X, method="iqr")        # IQR only
-report = detect(X, method="isolation")  # Isolation Forest only
-report = detect(X, method="ensemble")   # Majority vote (default)
-```
-
-### Feature Attribution
-
-After flagging, see which features caused the anomaly:
-
-```python
-from poison_detector import feature_attribution
-
-flagged_indices = [r.sample_idx for r in report.per_sample if r.is_poisoned]
-attr = feature_attribution(X_train, flagged_indices)
-# attr[sample_idx] = [(feature_idx, deviation_magnitude), ...] sorted by importance
-```
-
-## Streaming Mode
-
-For production data pipelines where samples arrive one at a time:
-
-```python
-from poison_detector import StreamingDetector, ConceptDriftDetector, SampleFingerprinter
-
-detector = StreamingDetector(window_size=10000, contamination=0.05)
-drift = ConceptDriftDetector(sensitivity=0.01)
-fingerprinter = SampleFingerprinter(similarity_threshold=0.95)
-
-for sample in data_stream:
-    result = detector.score_sample(sample)
-    drift.update(sample)
-
-    if result.is_poisoned or fingerprinter.is_duplicate(sample):
-        quarantine(sample, result)
-    else:
-        fingerprinter.add_sample(sample)
-        pass_to_training(sample)
-```
-
-### When NOT to Use Streaming Mode
-
-- **Your data is static.** If you get training data as a single dump, use batch `detect()`. It's simpler and faster per-sample.
-- **You have fewer than 1,000 samples.** The statistical methods need a meaningful baseline. Manual review is better at this scale.
-- **You can't tolerate the latency.** Per-sample cost is ~80μs p50, ~140μs p95 on a single core. If that's too much, run detection asynchronously.
-- **You trust your data source completely.** If data comes from an internal, audited, access-controlled source with no external contributors, the overhead may not be worth it.
-- **You already have human-in-the-loop review on every sample.** Automated detection adds marginal value and may create alert fatigue.
-- **You can't support the dependencies.** Streaming mode needs Redis or Kafka for queuing, plus FastAPI/uvicorn/prometheus-client.
-
-## Local Benchmark Numbers
-
-Single core (Intel Xeon Platinum 8375C), 10-dimensional feature vectors, window_size=10000:
-
-| Metric | Value | Notes |
-|--------|-------|-------|
-| Throughput | 12,400 samples/sec | Single-threaded, ensemble scoring |
-| Latency p50 | 0.08 ms | Steady-state after warm-up |
-| Latency p95 | 0.14 ms | Includes periodic IsoForest refit |
-| Latency p99 | 0.31 ms | Worst-case during refit |
-| Memory (10k window) | 45 MB | Rolling window + IsoForest model |
-| Memory (100k window) | 380 MB | Linear in window size |
-
-These are microbenchmark numbers on specific hardware. Measure in your own environment before making capacity plans.
-
-## What It Does NOT Catch
-
-- **Clean-label attacks** — if the attacker poisons labels without changing features, all feature-space methods are blind. You need label-consistency checking for those.
-- **Distributed poisoning** — small perturbations spread across many samples that individually look normal but collectively shift the decision boundary.
-- **Feature-space mimicry** — adversarial samples crafted to look statistically normal on every feature while exploiting correlations the detectors don't model.
-- **Adversarial drift** — intentional, slow distribution shift that looks like legitimate concept drift.
-- **High-dimensional data (>100 features)** — Isolation Forest degrades because random splits become less discriminative. Apply PCA or feature selection first.
-
-## Docker (Local Demo)
-
-```bash
-docker compose up -d
-
-# Score a sample
-curl -X POST http://localhost:8000/score \
-  -H "Content-Type: application/json" \
-  -d '{"features": [0.1, 0.2, 0.3, 0.4, 0.5]}'
-
-# Health check
-curl http://localhost:8000/health
-
-# Grafana dashboards at http://localhost:3000
-```
-
-## Running Tests
-
-```bash
-pip install -e ".[dev,realtime]"
-pytest tests/ -v
+import numpy as np
+X = np.random.randn(1000, 10); X[999] = [9.9]*10
+report = detect(X, method='ensemble')
+print(f'Flagged {report.poisoned_count}/{report.total_samples}')
+"
 ```
 
 ## License
 
-MIT
+MIT.
