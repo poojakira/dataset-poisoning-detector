@@ -8,7 +8,7 @@ Statistical anomaly detection for ML training data. Ensemble of Z-score, IQR fen
 
 ## Honest Assessment
 
-**ROC-AUC 0.53–0.56 on CIFAR-10 label-flip benchmark** — barely above random chance. The feature-space approach fundamentally cannot catch clean-label attacks. The streaming infrastructure works well; the core detection algorithm needs replacement. Consider CleanLab or spectral signatures for production use.
+**ROC-AUC 0.53–0.56 on CIFAR-10 label-flip benchmark**  -  barely above random chance. The feature-space approach fundamentally cannot catch clean-label attacks. The streaming infrastructure works well; the core detection algorithm needs replacement. Consider CleanLab or spectral signatures for production use.
 
 This is a screening tool for finding statistical outliers that warrant human review. It's not a defense.
 
