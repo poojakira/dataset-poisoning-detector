@@ -57,23 +57,18 @@ The engineering value is in the streaming infrastructure, not the detection algo
 ## Quick Start
 
 ```bash
-pip install dataset-poisoning-detector
+# Install from source (not published to PyPI)
+pip install -e .
 
-# Batch detection
+# Batch detection — detect() takes a list-of-lists feature matrix
 python -c "
 from poison_detector import detect
-import numpy as np
-X = np.random.randn(1000, 10)
+import random
+X = [[random.gauss(0, 1) for _ in range(10)] for _ in range(1000)]
 X[999] = [9.9] * 10  # inject obvious outlier
 report = detect(X, method='ensemble')
 print(f'Flagged {report.poisoned_count}/{report.total_samples}')
 "
-
-# Streaming mode with monitoring
-python -m poison_detector.stream --input data/pipeline --monitor grafana
-
-# Docker deployment
-docker compose up -d
 
 # Run tests
 pytest tests/ -v

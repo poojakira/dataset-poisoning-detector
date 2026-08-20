@@ -10,45 +10,39 @@
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -e .
 ```
 
-## Install (Docker)
+## Run Detection
 
-```bash
-docker build -t poisoning-detector .
+The detector is a library. `detect()` takes a feature matrix as a list of lists
+and returns a `DetectionReport`.
+
+```python
+from poison_detector import detect
+import random
+
+# Build a feature matrix (list[list[float]]), inject one outlier
+X = [[random.gauss(0, 1) for _ in range(10)] for _ in range(1000)]
+X[999] = [9.9] * 10
+
+report = detect(X, method="ensemble")   # "zscore" | "iqr" | "isolation_forest" | "ensemble"
+print(f"Flagged {report.poisoned_count}/{report.total_samples}")
+for score in report.scores[:5]:
+    print(score)
 ```
-
-## Run Detection (Batch)
-
-```bash
-python -m poison_detector --dataset data/training_set.csv --output results/report.json
-```
-
-Docker:
-```bash
-docker run --rm -v $(pwd)/data:/app/data poisoning-detector --dataset /app/data/training_set.csv
-```
-
-## Run Detection (Streaming Mode)
-
-```bash
-python -m poison_detector --stream --input-dir data/incoming/ --poll-interval 30
-```
-
-Monitors `incoming/` for new CSVs and scores them on arrival. Results append to `results/stream_log.jsonl`.
 
 ## Interpret Results
 
 | Field | Meaning |
 |-------|---------|
-| `outlier_score` | Per-sample anomaly score (higher = more suspicious) |
-| `flagged` | Boolean — sample exceeds threshold |
-| `auc` | Detector's overall AUC (~0.53 baseline; improve with tuning) |
+| `poisoned_count` | Number of samples flagged as anomalous |
+| `total_samples` | Total samples scored |
+| `scores` | Per-sample anomaly scores (higher = more suspicious) |
 
-- AUC 0.53 is near random — expected on clean data or subtle attacks
-- Flag rate >5% on known-clean data → lower sensitivity with `--threshold`
-- Review flagged samples manually before removing from training set
+- Benchmark ROC-AUC is 0.53–0.56 — near random. This is a screening layer, not a defense.
+- Review flagged samples manually before removing from a training set.
+- Try `method="isolation_forest"` for high-dimensional data.
 
 ## Test
 
@@ -60,7 +54,6 @@ pytest tests/ -v
 
 | Issue | Fix |
 |-------|-----|
-| Low AUC on known-poisoned data | Try `--method isolation_forest` or tune `--contamination` |
-| Docker OOM | Increase memory: `docker run --memory=4g ...` |
-| Streaming misses files | Check `--poll-interval` and file permissions |
-| CSV parse errors | Ensure UTF-8 encoding, no BOM, consistent delimiters |
+| `ValueError: truth value of an array is ambiguous` | Pass a `list[list[float]]`, not a numpy array |
+| Low AUC on known-poisoned data | Expected — feature-space stats miss clean-label attacks |
+| `ModuleNotFoundError: poison_detector` | Run `pip install -e .` from repo root |
