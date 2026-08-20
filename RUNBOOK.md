@@ -22,7 +22,7 @@ docker build -t poisoning-detector .
 ## Run Detection (Batch)
 
 ```bash
-python detect.py --dataset data/training_set.csv --output results/report.json
+python -m poison_detector --dataset data/training_set.csv --output results/report.json
 ```
 
 Docker:
@@ -33,7 +33,7 @@ docker run --rm -v $(pwd)/data:/app/data poisoning-detector --dataset /app/data/
 ## Run Detection (Streaming Mode)
 
 ```bash
-python detect.py --stream --input-dir data/incoming/ --poll-interval 30
+python -m poison_detector --stream --input-dir data/incoming/ --poll-interval 30
 ```
 
 Monitors `incoming/` for new CSVs and scores them on arrival. Results append to `results/stream_log.jsonl`.
