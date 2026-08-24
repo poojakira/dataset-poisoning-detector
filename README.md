@@ -1,48 +1,28 @@
 # Dataset Poisoning Detector
 
-Catch poisoned training samples before they corrupt your model. Statistical ensemble detection at streaming speed (12,400 samples/sec) with honest reporting of what works and what doesn't.
+Statistical screening for training data pipelines. Runs an ensemble of Z-score, IQR, and Isolation Forest detectors on streaming data at ~12,400 samples/sec and flags suspicious samples before they enter your training set.
 
 ---
 
-## The Problem No One Monitors
+## What This Does
 
-Your model training pipeline ingests data from dozens of sources. Some are internal databases, some are vendor feeds, some are scraped. Nobody checks whether the data itself has been tampered with.
+I built this because we kept getting bitten by slow data corruption. A vendor feed drifts, or someone pushes bad features to a shared table, and three retraining cycles later your model's precision has quietly dropped 13 points. Nobody thinks to check the data because the pipeline didn't error out.
 
-Imagine this: a vendor's API starts returning subtly corrupted feature vectors for 2% of samples. Not enough to crash anything. Not enough for anyone to notice in batch metrics. But over three retraining cycles, your fraud detection model's precision drops from 94% to 81%. You spend two weeks debugging model code before someone thinks to check the training data.
+This tool sits at the ingestion boundary (MITRE ATLAS AML.T0020) and applies statistical tests to every incoming sample. It won't catch sophisticated targeted attacks, but it catches the dumb stuff fast: corrupted feature vectors, distribution shifts, gross outliers. It produces structured logs so you have an audit trail of what went into training and what got flagged.
 
-Data poisoning (MITRE ATLAS AML.T0020) targets the one phase where ML systems are most vulnerable and least monitored: training data ingestion. This tool puts a statistical screening layer at that boundary.
-
----
-
-## Executive Summary
-
-This library is for ML engineers, MLOps teams, and security practitioners who need continuous monitoring of training data integrity. It does not replace human review or advanced detection methods. It provides a fast, deployable first line of defense that:
-
-- Catches gross statistical outliers and data corruption immediately
-- Raises the cost for attackers using naive poisoning strategies
-- Produces structured audit trails for training data provenance
-- Integrates into existing infrastructure (Docker, Kafka, Prometheus, Grafana)
-
-The target user has a production ML pipeline that ingests data continuously and wants a low-latency screening layer that flags suspicious samples for review before they enter the training set.
+It integrates with Kafka for streaming, exports Prometheus metrics, and ships with Docker and Grafana configs. You can deploy it in front of an existing pipeline without changing your training code.
 
 ---
 
-## Why This Repository Exists
+## Scope and Limitations
 
-Most ML security research focuses on model robustness after training. Very little open-source tooling exists for the pre-training phase: inspecting data as it arrives. This repository fills that gap by providing:
+This is a first-pass filter, not a complete defense. It works well for:
 
-- A working ensemble detector you can deploy today, not just a research notebook
-- Honest benchmarks showing where statistical methods succeed and where they fail
-- Streaming infrastructure that handles real-time data pipelines, not just batch analysis
-- A production-ready deployment stack (Docker, monitoring, alerting) out of the box
+- Catching statistical outliers and obvious data corruption
+- Making naive poisoning attacks more expensive
+- Maintaining provenance records for training data
 
-**Questions this repo answers:**
-
-1. Can simple statistical methods detect poisoned training samples at streaming throughput?
-2. How do Z-score, IQR, and Isolation Forest methods compare on real attack scenarios?
-3. What does a production deployment of data integrity monitoring actually look like?
-4. Where do feature-space methods break down, and what should you use instead?
-5. How do you build a screening system that resists adversarial manipulation of its own baseline?
+It does not replace careful data validation, domain-specific checks, or adversarial robustness techniques. The benchmarks in this repo show clearly where these methods fail, particularly against clean-label attacks that stay within normal feature distributions.
 
 ---
 
