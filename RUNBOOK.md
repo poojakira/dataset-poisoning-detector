@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.9+ (local) OR Docker 20.10+
+- Python 3.10+ (local) OR Docker 20.10+
 - Dataset in CSV format with labeled columns
 
 ## Install (Local)
@@ -26,10 +26,10 @@ import random
 X = [[random.gauss(0, 1) for _ in range(10)] for _ in range(1000)]
 X[999] = [9.9] * 10
 
-report = detect(X, method="ensemble")   # "zscore" | "iqr" | "isolation_forest" | "ensemble"
+report = detect(X, method="ensemble")   # "zscore" | "iqr" | "isolation" | "ensemble"
 print(f"Flagged {report.poisoned_count}/{report.total_samples}")
-for score in report.scores[:5]:
-    print(score)
+for result in report.per_sample[:5]:
+    print(result)
 ```
 
 ## Interpret Results
@@ -38,11 +38,11 @@ for score in report.scores[:5]:
 |-------|---------|
 | `poisoned_count` | Number of samples flagged as anomalous |
 | `total_samples` | Total samples scored |
-| `scores` | Per-sample anomaly scores (higher = more suspicious) |
+| `per_sample` | Per-sample PoisonResult objects (higher anomaly_score = more suspicious) |
 
 - Benchmark ROC-AUC is 0.53–0.56 — near random. This is a screening layer, not a defense.
 - Review flagged samples manually before removing from a training set.
-- Try `method="isolation_forest"` for high-dimensional data.
+- Try `method="isolation"` for high-dimensional data.
 
 ## Test
 
