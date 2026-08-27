@@ -320,6 +320,8 @@ The repository includes `benchmark/cifar10_label_flip_benchmark.py` which evalua
 | Latency p99 | 0.31 ms |
 | Ensemble strategy | Majority vote (>= 2/3 agree) |
 
+> See `benchmarks/BENCHMARK_METADATA.md` for full methodology. Throughput measured locally on M2/16GB with 20-dimensional features; varies with hardware and configuration.
+
 ### Honest Assessment
 
 **The 0.53-0.56 AUC on CIFAR-10 label-flip is near random chance.** This is not a failure of implementation; it is a fundamental limitation of the approach. Feature-space statistical methods cannot detect attacks where the features are unchanged and only labels are corrupted.
