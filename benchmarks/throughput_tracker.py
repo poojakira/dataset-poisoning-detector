@@ -296,7 +296,7 @@ def run_all_benchmarks() -> BenchmarkResult:
 
     ci_gate_passed = streaming["throughput"] > 10000
     print(f"\n{'=' * 60}")
-    print(f"CI GATE: throughput > 10,000 samples/sec → {'PASS ✓' if ci_gate_passed else 'FAIL ✗'}")
+    print(f"CI GATE: throughput > 10,000 samples/sec -> {'PASS' if ci_gate_passed else 'FAIL'}")
     print(f"  Measured: {streaming['throughput']:.0f} samples/sec")
     print(f"{'=' * 60}")
 
