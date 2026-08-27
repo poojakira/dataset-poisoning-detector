@@ -411,6 +411,13 @@ Based on the repository structure and identified limitations:
 
 ---
 
+
+## Additional Documentation
+
+- [INCIDENT_RUNBOOK.md](INCIDENT_RUNBOOK.md) - incident response for streaming pipeline issues
+- [docs/DETECTION_EFFICACY.md](docs/DETECTION_EFFICACY.md) - honest detection performance assessment per method
+- [enchmarks/throughput_tracker.py](benchmarks/throughput_tracker.py) - throughput regression gate (>10k samples/sec)
+
 ## License and Author
 
 MIT License. See [LICENSE](LICENSE) for full text.
