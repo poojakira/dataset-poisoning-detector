@@ -187,7 +187,7 @@ class TestStreamingIntegration:
         poisoned = generate_poisoned_samples(50)
         combined = normal + poisoned
         rng = np.random.RandomState(123)
-        rng.shuffle(combined)
+        rng.shuffle(combined)  # type: ignore[arg-type]  # in-place shuffle of a Python list
         return combined
 
     def test_basic_detection_on_mixed_stream(self, detector, mixed_stream):
