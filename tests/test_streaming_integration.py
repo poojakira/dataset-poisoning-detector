@@ -17,18 +17,21 @@ from collections import Counter
 # Fixtures & helpers
 # ---------------------------------------------------------------------------
 
+
 def generate_normal_samples(n: int, dim: int = 128, seed: int = 42) -> list[dict]:
     """Generate n normal (clean) samples with Gaussian features."""
     rng = np.random.RandomState(seed)
     samples = []
     for i in range(n):
         features = rng.randn(dim).tolist()
-        samples.append({
-            "id": f"normal-{i:05d}",
-            "features": features,
-            "label": int(rng.randint(0, 10)),
-            "metadata": {"source": "clean-train", "timestamp": time.time()},
-        })
+        samples.append(
+            {
+                "id": f"normal-{i:05d}",
+                "features": features,
+                "label": int(rng.randint(0, 10)),
+                "metadata": {"source": "clean-train", "timestamp": time.time()},
+            }
+        )
     return samples
 
 
@@ -45,12 +48,14 @@ def generate_poisoned_samples(n: int, dim: int = 128, seed: int = 99) -> list[di
         # Inject backdoor trigger pattern
         for j in range(8):
             features[j] = 10.0 + rng.uniform(0, 0.5)
-        samples.append({
-            "id": f"poison-{i:05d}",
-            "features": features,
-            "label": 0,  # target label
-            "metadata": {"source": "poisoned-inject", "timestamp": time.time()},
-        })
+        samples.append(
+            {
+                "id": f"poison-{i:05d}",
+                "features": features,
+                "label": 0,  # target label
+                "metadata": {"source": "poisoned-inject", "timestamp": time.time()},
+            }
+        )
     return samples
 
 
@@ -63,6 +68,7 @@ def sample_fingerprint(sample: dict) -> str:
 # ---------------------------------------------------------------------------
 # StreamingDetector stub (mirrors expected project interface)
 # ---------------------------------------------------------------------------
+
 
 class StreamingDetector:
     """
@@ -105,11 +111,13 @@ class StreamingDetector:
         is_flagged = score > self.threshold
 
         if is_flagged:
-            self.flagged.append({
-                "sample_id": sample["id"],
-                "score": score,
-                "reason": "feature_anomaly",
-            })
+            self.flagged.append(
+                {
+                    "sample_id": sample["id"],
+                    "score": score,
+                    "reason": "feature_anomaly",
+                }
+            )
 
         return {
             "status": "flagged" if is_flagged else "clean",
@@ -135,9 +143,7 @@ class StreamingDetector:
             return {"drift_detected": False, "reason": "baseline_set"}
 
         # KS-like drift: check if mean shifted beyond 2 std
-        drift_score = float(
-            np.max(np.abs(current_mean - self._baseline_mean) / self._baseline_std)
-        )
+        drift_score = float(np.max(np.abs(current_mean - self._baseline_mean) / self._baseline_std))
         drift_detected = drift_score > 2.0
         if drift_detected:
             self.drift_triggered = True
@@ -161,6 +167,7 @@ class StreamingDetector:
 # ---------------------------------------------------------------------------
 # Integration Tests
 # ---------------------------------------------------------------------------
+
 
 class TestStreamingIntegration:
     """Full integration tests for streaming poison detection pipeline."""
@@ -190,13 +197,11 @@ class TestStreamingIntegration:
 
         stats = detector.get_stats()
         assert stats["processed"] == 1050
-        assert stats["flagged"] > 0, (
-            f"Expected at least 1 flagged sample out of 50 poisoned, got 0"
-        )
+        assert stats["flagged"] > 0, "Expected at least 1 flagged sample out of 50 poisoned, got 0"
         # Should flag a meaningful fraction of the 50 poisoned samples
-        assert stats["flagged"] >= 10, (
-            f"Expected at least 10 flagged (of 50 poisoned), got {stats['flagged']}"
-        )
+        assert (
+            stats["flagged"] >= 10
+        ), f"Expected at least 10 flagged (of 50 poisoned), got {stats['flagged']}"
 
     def test_no_false_negatives_on_obvious_poison(self, detector):
         """Strongly poisoned samples should always be flagged."""
@@ -233,20 +238,22 @@ class TestStreamingIntegration:
         shifted_samples = []
         for i in range(200):
             features = (rng.randn(128) + 5.0).tolist()  # mean shifted by 5
-            shifted_samples.append({
-                "id": f"shifted-{i:05d}",
-                "features": features,
-                "label": int(rng.randint(0, 10)),
-                "metadata": {"source": "shifted"},
-            })
+            shifted_samples.append(
+                {
+                    "id": f"shifted-{i:05d}",
+                    "features": features,
+                    "label": int(rng.randint(0, 10)),
+                    "metadata": {"source": "shifted"},
+                }
+            )
 
         for sample in shifted_samples:
             detector.ingest(sample)
 
         drift_result = detector.check_drift()
-        assert drift_result["drift_detected"] is True, (
-            f"Drift should be detected after mean shift. Score: {drift_result.get('drift_score')}"
-        )
+        assert (
+            drift_result["drift_detected"] is True
+        ), f"Drift should be detected after mean shift. Score: {drift_result.get('drift_score')}"
         assert detector.drift_triggered is True
 
     def test_drift_stable_on_clean_data(self, detector):
@@ -332,9 +339,7 @@ class TestStreamingIntegration:
         elapsed = time.perf_counter() - start
 
         throughput = 1000 / elapsed
-        assert throughput > 1000, (
-            f"Throughput too low: {throughput:.0f} samples/sec (need > 1000)"
-        )
+        assert throughput > 1000, f"Throughput too low: {throughput:.0f} samples/sec (need > 1000)"
 
     def test_stats_accuracy(self, detector, mixed_stream):
         """Stats should accurately reflect processing state."""

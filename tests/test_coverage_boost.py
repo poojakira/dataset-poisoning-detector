@@ -109,9 +109,7 @@ class QuarantineStore:
         }
 
     def mark_reviewed(self, sample_id: str) -> bool:
-        cursor = self.conn.execute(
-            "UPDATE quarantine SET reviewed = 1 WHERE id = ?", (sample_id,)
-        )
+        cursor = self.conn.execute("UPDATE quarantine SET reviewed = 1 WHERE id = ?", (sample_id,))
         self.conn.commit()
         return cursor.rowcount > 0
 
@@ -120,9 +118,7 @@ class QuarantineStore:
         return row[0]
 
     def count_unreviewed(self) -> int:
-        row = self.conn.execute(
-            "SELECT COUNT(*) FROM quarantine WHERE reviewed = 0"
-        ).fetchone()
+        row = self.conn.execute("SELECT COUNT(*) FROM quarantine WHERE reviewed = 0").fetchone()
         return row[0]
 
     def purge_reviewed(self) -> int:
@@ -179,7 +175,9 @@ class MetricsRegistry:
         return {
             "counters": dict(self._counters),
             "gauges": dict(self._gauges),
-            "histograms": {k: {"count": len(v), "avg": sum(v) / len(v)} for k, v in self._histograms.items()},
+            "histograms": {
+                k: {"count": len(v), "avg": sum(v) / len(v)} for k, v in self._histograms.items()
+            },
         }
 
     def reset(self):
@@ -217,9 +215,7 @@ class PipelineConsumer:
 
         if result.get("status") == "flagged":
             self.metrics.increment("samples_flagged")
-            self.store.store(
-                sample["id"], sample, result.get("score", 0.0), "pipeline_detection"
-            )
+            self.store.store(sample["id"], sample, result.get("score", 0.0), "pipeline_detection")
             if result.get("score", 0) > 8.0:
                 self.alerter.send_alert(
                     f"High-confidence poison detected: {sample['id']} (score={result['score']:.2f})",
@@ -238,6 +234,7 @@ class PipelineConsumer:
 # ---------------------------------------------------------------------------
 # Tests: Alerting Module
 # ---------------------------------------------------------------------------
+
 
 class TestAlertManager:
     """Tests for the alerting module (Slack + PagerDuty)."""
@@ -277,10 +274,12 @@ class TestAlertManager:
             mgr.send_pagerduty("test")
 
     def test_send_alert_both_channels(self):
-        mgr = AlertManager({
-            "slack_webhook": "https://hooks.slack.com/test",
-            "pagerduty_routing_key": "key-456",
-        })
+        mgr = AlertManager(
+            {
+                "slack_webhook": "https://hooks.slack.com/test",
+                "pagerduty_routing_key": "key-456",
+            }
+        )
         results = mgr.send_alert("Dual alert test", severity="warning")
         assert len(results) == 2
         assert len(mgr.alerts_sent) == 2
@@ -299,6 +298,7 @@ class TestAlertManager:
 # ---------------------------------------------------------------------------
 # Tests: Quarantine Storage (SQLite)
 # ---------------------------------------------------------------------------
+
 
 class TestQuarantineStore:
     """Tests for SQLite quarantine storage."""
@@ -364,6 +364,7 @@ class TestQuarantineStore:
 # ---------------------------------------------------------------------------
 # Tests: Config Loading (YAML)
 # ---------------------------------------------------------------------------
+
 
 class TestConfigLoading:
     """Tests for YAML configuration loading and validation."""
@@ -433,6 +434,7 @@ class TestConfigLoading:
 # Tests: Metrics Registry
 # ---------------------------------------------------------------------------
 
+
 class TestMetricsRegistry:
     """Tests for the metrics counters, gauges, and histograms."""
 
@@ -498,6 +500,7 @@ class TestMetricsRegistry:
 # Tests: Pipeline Consumer Message Handling
 # ---------------------------------------------------------------------------
 
+
 class TestPipelineConsumer:
     """Tests for Kafka pipeline consumer message processing."""
 
@@ -508,10 +511,12 @@ class TestPipelineConsumer:
 
         detector = StreamingDetector({"threshold": 3.0})
         store = QuarantineStore(str(tmp_path / "pipeline_test.db"))
-        alerter = AlertManager({
-            "slack_webhook": "https://hooks.slack.com/test",
-            "pagerduty_routing_key": "test-key",
-        })
+        alerter = AlertManager(
+            {
+                "slack_webhook": "https://hooks.slack.com/test",
+                "pagerduty_routing_key": "test-key",
+            }
+        )
         metrics = MetricsRegistry()
         config = {"batch_size": 32, "topic": "test-topic"}
         consumer = PipelineConsumer(config, detector, store, alerter, metrics)
@@ -520,11 +525,13 @@ class TestPipelineConsumer:
 
     def test_process_valid_clean_message(self, pipeline_deps):
         consumer, detector, store, alerter, metrics = pipeline_deps
-        msg = json.dumps({
-            "id": "msg-001",
-            "features": [0.1] * 128,
-            "label": 5,
-        }).encode()
+        msg = json.dumps(
+            {
+                "id": "msg-001",
+                "features": [0.1] * 128,
+                "label": 5,
+            }
+        ).encode()
         result = consumer.process_message(msg)
         assert result["status"] == "clean"
         assert metrics.get_counter("messages_received") == 1
@@ -532,11 +539,13 @@ class TestPipelineConsumer:
 
     def test_process_valid_poisoned_message(self, pipeline_deps):
         consumer, detector, store, alerter, metrics = pipeline_deps
-        msg = json.dumps({
-            "id": "poison-msg-001",
-            "features": [10.0] * 8 + [0.0] * 120,
-            "label": 0,
-        }).encode()
+        msg = json.dumps(
+            {
+                "id": "poison-msg-001",
+                "features": [10.0] * 8 + [0.0] * 120,
+                "label": 0,
+            }
+        ).encode()
         result = consumer.process_message(msg)
         assert result["status"] == "flagged"
         assert metrics.get_counter("samples_flagged") == 1
@@ -560,11 +569,13 @@ class TestPipelineConsumer:
     def test_high_score_triggers_alert(self, pipeline_deps):
         consumer, detector, store, alerter, metrics = pipeline_deps
         # Create a sample with extremely high anomaly score
-        msg = json.dumps({
-            "id": "critical-001",
-            "features": [100.0] * 8 + [0.0] * 120,  # score >> 8.0
-            "label": 0,
-        }).encode()
+        msg = json.dumps(
+            {
+                "id": "critical-001",
+                "features": [100.0] * 8 + [0.0] * 120,  # score >> 8.0
+                "label": 0,
+            }
+        ).encode()
         consumer.process_message(msg)
         # Should have triggered alerting
         assert len(alerter.alerts_sent) > 0
@@ -572,11 +583,13 @@ class TestPipelineConsumer:
     def test_moderate_score_no_alert(self, pipeline_deps):
         consumer, detector, store, alerter, metrics = pipeline_deps
         # Score above threshold but below alert threshold (8.0)
-        msg = json.dumps({
-            "id": "moderate-001",
-            "features": [4.0] * 8 + [0.0] * 120,  # score ~4.0, below 8.0
-            "label": 0,
-        }).encode()
+        msg = json.dumps(
+            {
+                "id": "moderate-001",
+                "features": [4.0] * 8 + [0.0] * 120,  # score ~4.0, below 8.0
+                "label": 0,
+            }
+        ).encode()
         consumer.process_message(msg)
         assert len(alerter.alerts_sent) == 0
 
@@ -591,11 +604,13 @@ class TestPipelineConsumer:
     def test_multiple_messages_metrics_accumulate(self, pipeline_deps):
         consumer, detector, store, alerter, metrics = pipeline_deps
         for i in range(10):
-            msg = json.dumps({
-                "id": f"batch-{i}",
-                "features": [0.5] * 128,
-                "label": i % 10,
-            }).encode()
+            msg = json.dumps(
+                {
+                    "id": f"batch-{i}",
+                    "features": [0.5] * 128,
+                    "label": i % 10,
+                }
+            ).encode()
             consumer.process_message(msg)
         assert metrics.get_counter("messages_received") == 10
         assert metrics.get_counter("messages_processed") == 10
