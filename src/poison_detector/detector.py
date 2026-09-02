@@ -39,12 +39,68 @@ Honest Limitations:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from .statistical import zscore_detect, iqr_detect
 from .isolation import IsolationDetector
 from .attribution import feature_attribution
 from .spectral import spectral_detect
+
+
+def _validate_matrix(X: list[list[float]]) -> None:
+    """Validate the feature matrix before any detector touches it.
+
+    A poisoning detector that silently returns "0 flagged" on garbage input is
+    worse than useless -- it gives false assurance. We fail loud instead:
+
+      * ``X`` must be a non-empty list of samples,
+      * every sample must be a non-empty list of the *same* length (rectangular),
+      * every value must be a finite real number (no ``NaN``/``inf``, which would
+        otherwise propagate silently through mean/std and hide real anomalies).
+
+    Args:
+        X: Feature matrix as a list of equal-length lists.
+
+    Raises:
+        TypeError: If ``X`` or a row is not a list, or a value is non-numeric.
+        ValueError: If ``X`` is empty, ragged, has empty rows, or contains
+            a non-finite value.
+    """
+    if not isinstance(X, list):
+        raise TypeError(f"X must be a list of samples (list[list[float]]), got {type(X).__name__}")
+    if len(X) == 0:
+        raise ValueError("X is empty: nothing to scan. Provide at least one sample.")
+
+    first = X[0]
+    if not isinstance(first, list):
+        raise TypeError(
+            f"each sample must be a list of features, got {type(first).__name__} for sample 0"
+        )
+    n_features = len(first)
+    if n_features == 0:
+        raise ValueError("samples have zero features: each sample must have >= 1 feature.")
+
+    for i, row in enumerate(X):
+        if not isinstance(row, list):
+            raise TypeError(f"sample {i} is not a list, got {type(row).__name__}")
+        if len(row) != n_features:
+            raise ValueError(
+                f"ragged matrix: sample {i} has {len(row)} features but sample 0 has "
+                f"{n_features}. All samples must have the same number of features."
+            )
+        for j, val in enumerate(row):
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                raise TypeError(
+                    f"non-numeric value at sample {i}, feature {j}: "
+                    f"{val!r} ({type(val).__name__})"
+                )
+            if not math.isfinite(val):
+                raise ValueError(
+                    f"non-finite value (NaN/inf) at sample {i}, feature {j}: {val!r}. "
+                    "Clean or impute NaN/inf before scanning -- otherwise anomalies "
+                    "are silently hidden."
+                )
 
 
 @dataclass
@@ -116,7 +172,17 @@ def detect(
     if method not in valid_methods:
         raise ValueError(f"Unknown method '{method}'. Must be one of {valid_methods}")
 
+    _validate_matrix(X)
+
     n_samples = len(X)
+
+    # Density/covariance methods are meaningless on a single sample: there is no
+    # distribution to be an outlier of. Fail loud rather than return "0 flagged".
+    if n_samples < 2 and method in {"isolation", "ensemble", "spectral"}:
+        raise ValueError(
+            f"method '{method}' needs at least 2 samples to estimate a distribution, "
+            f"got {n_samples}. Use 'zscore'/'iqr' for tiny inputs, or provide more samples."
+        )
 
     if method == "spectral":
         if labels is None:
@@ -124,6 +190,10 @@ def detect(
                 "labels are required for spectral detection. "
                 "Spectral signatures analyze the covariance structure "
                 "WITHIN each class to find mislabeled samples."
+            )
+        if len(labels) != n_samples:
+            raise ValueError(
+                f"labels length ({len(labels)}) must match number of samples ({n_samples})."
             )
         return _spectral_report(X, labels)
 

@@ -103,10 +103,12 @@ Clean-label attack:                      AUC = 0.55
 **How it works:** Runs a lightweight subset of methods on each sample in real-time, optimized for throughput over recall. Uses z-score anomaly detection on incoming feature vectors.
 
 **Strengths:**
-- High throughput: > 10,000 samples/sec
-- Low latency: P50 < 0.05ms per sample
+- High throughput on the z-score/IQR path: ~12,000+ samples/sec (20-dim, IsolationForest refit excluded)
+- Low latency: P50 < 0.05ms per sample on the statistical path
 - Catches obvious anomalies immediately
 - Drift detection provides early warning
+
+> **Throughput caveat:** the >10k/sec figure is the statistical (Welford z-score/IQR) scoring path *only*. With the default periodic IsolationForest refit enabled (every 1000 samples on up to a 10k-sample window), sustained throughput is far lower because the refit dominates. Tune `refit_interval` to trade multivariate recall for speed.
 
 **Weaknesses:**
 - Trades recall for throughput — will miss subtle attacks
@@ -116,7 +118,8 @@ Clean-label attack:                      AUC = 0.55
 
 **Measured baselines:**
 ```
-Throughput:                     > 10,000 samples/sec
+Throughput (z-score/IQR path, refit excluded):  ~12,000+ samples/sec
+Throughput (default config, refit enabled):      far lower (refit-bound)
 Strong backdoor (obvious):     Detection rate ~90%
 Subtle backdoor:               Detection rate ~30%
 Label-flip (individual):       Detection rate ~15% (fundamentally hard per-sample)

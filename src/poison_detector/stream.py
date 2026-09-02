@@ -232,9 +232,27 @@ class StreamingDetector:
 
         sample_arr = np.asarray(sample, dtype=np.float64)
 
+        # Fail loud on malformed vectors rather than emitting NaN scores that a
+        # caller might read as "clean". An empty vector has no features to score;
+        # a non-finite value would poison the running mean/variance forever.
+        if sample_arr.ndim != 1:
+            raise ValueError(f"sample must be a 1D feature vector, got shape {sample_arr.shape}")
+        if sample_arr.size == 0:
+            raise ValueError("sample has zero features: nothing to score.")
+        if not np.all(np.isfinite(sample_arr)):
+            raise ValueError(
+                "sample contains NaN/inf; clean or impute before scoring "
+                "(non-finite values corrupt the rolling statistics)."
+            )
+
         # Lazy initialization on first sample
         if self._n_features is None:
             self._initialize_features(len(sample_arr))
+        elif sample_arr.size != self._n_features:
+            raise ValueError(
+                f"feature-count mismatch: this detector was initialized with "
+                f"{self._n_features} features but got {sample_arr.size}."
+            )
 
         method_votes: dict[str, bool] = {}
         scores: list[float] = []

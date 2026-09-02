@@ -1,6 +1,12 @@
 # Dataset Poisoning Detector
 
-Statistical screening for training data pipelines. Runs an ensemble of Z-score, IQR, and Isolation Forest detectors on streaming data at ~12,400 samples/sec and flags suspicious samples before they enter your training set.
+Statistical screening for training data pipelines. The online z-score/IQR
+scoring path runs at ~12,400 samples/sec (20-dim features, IsolationForest
+refit excluded — see below); the periodic multivariate IsolationForest refit is
+the throughput bottleneck. Flags suspicious samples before they enter your
+training set. **This is a screening layer, not a defense** — on feature-space
+statistics alone it sits near ~0.54 AUC for subtle/image attacks. For label-flip
+attacks, use the label-aware `spectral` method.
 
 ---
 
@@ -315,7 +321,8 @@ The repository includes `benchmark/cifar10_label_flip_benchmark.py` which evalua
 |--------|-------|
 | Detection AUC (feature-space ensemble) | 0.53 - 0.56 |
 | Detection AUC (spectral signatures) | Higher (label-aware) |
-| Streaming throughput | 12,400 samples/sec |
+| Streaming throughput (z-score/IQR path, refit excluded) | ~12,400 samples/sec |
+| Streaming throughput (default config, with periodic IsolationForest refit) | far lower — refit dominates; tune `refit_interval` |
 | Latency p50 | 0.08 ms |
 | Latency p99 | 0.31 ms |
 | Ensemble strategy | Majority vote (>= 2/3 agree) |
@@ -358,7 +365,7 @@ The engineering value of this project is primarily in the streaming infrastructu
 | Monitoring and alerting | Yes | Prometheus metrics, Grafana dashboards, multi-channel alerts |
 | Streaming support | Yes | Kafka consumer, 12,400 samples/sec throughput |
 | Quarantine storage | Yes | Redis (streaming) + SQLite (batch) |
-| Test coverage | Yes | 11 test modules covering all components |
+| Test coverage | Yes | 12 test modules, 131 tests passing, covering all components incl. input-validation hardening |
 | CI/CD | Yes | GitHub Actions (`.github/` directory) |
 | Runbook | Yes | `RUNBOOK.md` with operational procedures |
 | Changelog | Yes | `CHANGELOG.md` with version history |
