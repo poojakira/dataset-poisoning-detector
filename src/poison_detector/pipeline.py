@@ -353,7 +353,7 @@ class RedisConsumer(PipelineConsumer):
             import redis.asyncio as aioredis
         except ImportError:
             raise ImportError(
-                "redis package required for RedisConsumer. " "Install with: pip install redis"
+                "redis package required for RedisConsumer. Install with: pip install redis"
             )
 
         try:
@@ -606,7 +606,7 @@ class KafkaConsumer(PipelineConsumer):
             from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
         except ImportError:
             raise ImportError(
-                "aiokafka package required for KafkaConsumer. " "Install with: pip install aiokafka"
+                "aiokafka package required for KafkaConsumer. Install with: pip install aiokafka"
             )
 
         try:
@@ -759,7 +759,7 @@ class KafkaConsumer(PipelineConsumer):
                 "timestamp": message.timestamp or str(time.time()),
             }
             await self._producer.send(self._quarantine_topic, payload)
-            logger.info(f"Quarantined Kafka message {message.message_id} " f"(score={score:.3f})")
+            logger.info(f"Quarantined Kafka message {message.message_id} (score={score:.3f})")
 
     async def _dead_letter_raw_kafka(self, msg: Any, error: str) -> None:
         """Route unparseable Kafka message to dead letter."""

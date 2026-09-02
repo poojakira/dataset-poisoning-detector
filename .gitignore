@@ -2,11 +2,13 @@
 .venv/
 venv/
 env/
+.venv-audit/
 
 # Python caches
 __pycache__/
 *.py[cod]
 *$py.class
+.ruff_cache/
 
 # Distribution / packaging
 *.egg-info/

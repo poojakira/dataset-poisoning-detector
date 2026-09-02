@@ -292,8 +292,7 @@ class CloudWatchChannel:
             return True
         except ImportError:
             logger.info(
-                f"CloudWatch alert (boto3 not available): "
-                f"[{alert.severity.value}] {alert.title}"
+                f"CloudWatch alert (boto3 not available): [{alert.severity.value}] {alert.title}"
             )
             return True
         except Exception as e:
