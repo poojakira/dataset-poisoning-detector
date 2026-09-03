@@ -25,7 +25,7 @@
         "flagged": 100,
         "true_positives": 8,
         "method": "spectral (percentile threshold)",
-        "time_seconds": 0.579
+        "time_seconds": 0.16
       },
       "iqr_threshold": {
         "precision": 0.0556,
@@ -43,7 +43,7 @@
         "flagged": 200,
         "true_positives": 46,
         "method": "spectral (percentile threshold)",
-        "time_seconds": 0.459
+        "time_seconds": 0.119
       },
       "iqr_threshold": {
         "precision": 0.2162,
@@ -61,7 +61,7 @@
         "flagged": 400,
         "true_positives": 147,
         "method": "spectral (percentile threshold)",
-        "time_seconds": 0.495
+        "time_seconds": 0.182
       },
       "iqr_threshold": {
         "precision": 0.2222,
@@ -80,7 +80,7 @@
       "flagged": 518,
       "true_positives": 26,
       "method": "ensemble (z-score + IQR + IsolationForest)",
-      "time_seconds": 1.146
+      "time_seconds": 0.371
     },
     "0.10": {
       "precision": 0.0985,
@@ -89,7 +89,7 @@
       "flagged": 518,
       "true_positives": 51,
       "method": "ensemble (z-score + IQR + IsolationForest)",
-      "time_seconds": 1.11
+      "time_seconds": 0.338
     },
     "0.20": {
       "precision": 0.2066,
@@ -98,7 +98,7 @@
       "flagged": 518,
       "true_positives": 107,
       "method": "ensemble (z-score + IQR + IsolationForest)",
-      "time_seconds": 1.157
+      "time_seconds": 0.339
     }
   },
   "comparison": {

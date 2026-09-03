@@ -1,226 +1,138 @@
-# Detection Efficacy — Honest Assessment
+# Detection Efficacy — Honest, Reproducible Assessment
 
-This document provides transparent, honest documentation of what the dataset-poisoning-detector can and cannot detect, with measured baselines and recommendations.
+This document reports **only** numbers that are reproducible from committed
+benchmark scripts in this repository. Where a capability is weak or unmeasured,
+that is stated plainly. No AUC or F1 value appears here unless a committed
+script produces it.
 
----
-
-## Summary
-
-| Method | Domain | Attack Type | AUC | Verdict |
-|--------|--------|-------------|-----|---------|
-| Feature-space | Tabular | Backdoor | ~0.85 | ✅ Good |
-| Feature-space | Images (CIFAR-10) | Backdoor | ~0.54 | ⚠️ Weak |
-| Spectral signature | Any | Label-flip > 5% | ~0.80 | ✅ Good |
-| Spectral signature | Any | Label-flip < 5% | ~0.58 | ⚠️ Weak |
-| Activation clustering | DNNs | Backdoor | ~0.75 | ✅ Moderate |
-| Streaming ensemble | Any | Mixed | ~0.65 | ⚠️ Moderate (throughput-optimized) |
-
-**Bottom line:** This tool is effective for tabular data poisoning and label-flip attacks above 5%. For image-domain backdoors and subtle attacks, it provides limited detection and should be combined with other defenses.
+> **How every number here is backed.** Run `python benchmark/cifar10_label_flip_benchmark.py`.
+> It writes `results/spectral_benchmark.json` (committed). The tables below are
+> transcribed from that artifact. If a number is not in that artifact or another
+> committed result file, it is not claimed as measured.
 
 ---
 
-## Method-by-Method Analysis
+## Summary — what this tool actually does
 
-### 1. Feature-Space Methods
+| Method | Implemented? | What it targets | Measured result | Verdict |
+|--------|:---:|-----------------|-----------------|---------|
+| Feature-space (z-score / IQR) | ✅ `statistical.py` | Feature-space outliers | See ensemble F1 below | Weak on label-flip (features unchanged) |
+| Isolation Forest | ✅ `isolation.py` | Multivariate outliers | Part of ensemble | Weak on label-flip |
+| Ensemble (z-score + IQR + IsolationForest) | ✅ `detector.py` | Mixed | F1 0.08 / 0.14 / 0.23 @ 5/10/20% | Weak on label-flip |
+| Spectral signature | ✅ `spectral.py` | Label-flip ≥ ~10% | F1 0.08 / 0.23 / 0.37 @ 5/10/20% | Best of the implemented methods, still low |
+| Streaming ensemble | ✅ `stream.py` | Real-time screening | Throughput only (see caveat) | Screening, not a detector of subtle attacks |
 
-**How it works:** Computes distances from samples to their class centroid in feature space. Samples far from their class centroid relative to class variance are flagged as suspicious.
-
-**Strengths:**
-- Excellent for tabular data where poisoned samples create outliers in feature space
-- Low computational cost (linear in dataset size)
-- No model training required — works on raw features
-- AUC ~0.85 on tabular datasets with backdoor triggers affecting > 3 feature dimensions
-
-**Weaknesses:**
-- Poor on high-dimensional image features (CIFAR-10 AUC: 0.54 — barely above random)
-- Relies on poison samples being statistical outliers; fails for "clean-label" attacks
-- Sensitive to feature scaling and preprocessing
-- Class imbalance degrades centroid estimates
-
-**Why images are hard:**
-- Image features are high-dimensional and distributed non-uniformly
-- Backdoor triggers (e.g., small pixel patches) have minimal effect on global feature statistics
-- Requires meaningful feature representations (raw pixels are ineffective)
-
-**Measured baselines:**
-```
-Tabular (synthetic 128-dim, 5% poison):   AUC = 0.85 ± 0.03
-CIFAR-10 (raw features, 5% backdoor):     AUC = 0.54 ± 0.05
-CIFAR-10 (pretrained embeddings):          AUC = 0.67 ± 0.04  [requires external model]
-```
-
-### 2. Spectral Signature Detection
-
-**How it works:** Performs SVD on the centered feature/representation matrix. Poisoned samples tend to have large projections onto the top singular vector when the poison creates a distinct spectral signature.
-
-**Strengths:**
-- Theoretically grounded (Tran et al., 2018)
-- Very effective for label-flip attacks when poison rate > 5%
-- Works across data modalities when appropriate representations are used
-- Can detect attacks that don't create feature-space outliers
-
-**Weaknesses:**
-- Effectiveness drops sharply below 5% poison rate
-- Assumes poison creates a rank-1 perturbation (fails for distributed/multi-target attacks)
-- Requires choosing the correct representation layer for neural networks
-- Computational cost: O(n × d²) for SVD on large matrices
-
-**Measured baselines:**
-```
-Label-flip 10% poison rate:    AUC = 0.88
-Label-flip 5% poison rate:     AUC = 0.80
-Label-flip 3% poison rate:     AUC = 0.65
-Label-flip 1% poison rate:     AUC = 0.53 (ineffective)
-Backdoor (non-label-flip):     AUC = 0.62
-```
-
-**Critical limitation:** At < 5% poison rate, the spectral signature of the poison is indistinguishable from natural variance in the data. This is a fundamental mathematical limitation, not an implementation bug.
-
-### 3. Activation Clustering
-
-**How it works:** Clusters the activations of a trained model per class. If a class has two distinct clusters, one cluster may correspond to poisoned samples.
-
-**Strengths:**
-- Effective for backdoor attacks in neural networks
-- Can detect attacks invisible to feature-space methods
-- Leverages the model's own learned representations
-
-**Weaknesses:**
-- Requires a trained model (can't detect poison before training)
-- Assumes clean majority within each class
-- K=2 assumption may not hold for complex attack strategies
-- Not applicable to streaming (requires batch analysis after training)
-
-**Measured baselines:**
-```
-Backdoor (strong trigger, 10% rate):   AUC = 0.78
-Backdoor (subtle trigger, 5% rate):    AUC = 0.65
-Clean-label attack:                      AUC = 0.55
-```
-
-### 4. Streaming Ensemble (Combined)
-
-**How it works:** Runs a lightweight subset of methods on each sample in real-time, optimized for throughput over recall. Uses z-score anomaly detection on incoming feature vectors.
-
-**Strengths:**
-- High throughput on the z-score/IQR path: ~12,000+ samples/sec (20-dim, IsolationForest refit excluded)
-- Low latency: P50 < 0.05ms per sample on the statistical path
-- Catches obvious anomalies immediately
-- Drift detection provides early warning
-
-> **Throughput caveat:** the >10k/sec figure is the statistical (Welford z-score/IQR) scoring path *only*. With the default periodic IsolationForest refit enabled (every 1000 samples on up to a 10k-sample window), sustained throughput is far lower because the refit dominates. Tune `refit_interval` to trade multivariate recall for speed.
-
-**Weaknesses:**
-- Trades recall for throughput — will miss subtle attacks
-- Single-sample scoring lacks the batch context that makes spectral methods effective
-- No access to model activations (feature-only)
-- High FP rate on naturally high-variance data
-
-**Measured baselines:**
-```
-Throughput (z-score/IQR path, refit excluded):  ~12,000+ samples/sec
-Throughput (default config, refit enabled):      far lower (refit-bound)
-Strong backdoor (obvious):     Detection rate ~90%
-Subtle backdoor:               Detection rate ~30%
-Label-flip (individual):       Detection rate ~15% (fundamentally hard per-sample)
-Overall streaming AUC:         ~0.65
-```
+**Bottom line (honest):** On the standard label-flip benchmark (Tran et al. 2018
+setup, synthetic separable data), the strongest implemented method — spectral
+signatures — reaches **F1 ≈ 0.37 at a 20% poison rate** and is **near chance at
+5%**. This tool is a **screening aid**, not a high-recall poisoning detector. Use
+it as one layer of defense-in-depth, not as a sole control.
 
 ---
 
-## What We Cannot Detect
+## Measured baseline — label-flip detection
 
-Be explicit about known blind spots:
+Source: `results/spectral_benchmark.json`, produced by
+`benchmark/cifar10_label_flip_benchmark.py`.
 
-1. **Clean-label attacks** — Poison samples that are correctly labeled but contain triggers. These are statistically indistinguishable from clean data without model training.
+**Dataset:** `sklearn.make_classification` (2000 samples, 100 features,
+`n_informative=20`, `class_sep=2.0`, `random_state=2018`) — a synthetic stand-in
+for a trained model's penultimate-layer embeddings with well-separated classes.
+**This is not real CIFAR-10 image data** (see limitation below).
+**Attack:** random label flip, class 0 → class 1.
+**Metric:** precision / recall / F1 vs. ground-truth flipped indices.
 
-2. **Low-rate attacks (< 3%)** — At very low poison rates, the signal-to-noise ratio is too low for statistical methods.
+| Poison rate | Spectral (percentile) F1 | Spectral (IQR) F1 | Ensemble F1 | Winner |
+|:---:|:---:|:---:|:---:|:---:|
+| 5%  | 0.08 | 0.03 | 0.08 | tie (both near chance) |
+| 10% | 0.23 | 0.07 | 0.14 | spectral |
+| 20% | 0.37 | 0.03 | 0.23 | spectral |
 
-3. **Adaptive attacks** — An attacker who knows our detection methods can craft poison that evades them (e.g., minimizing spectral signature while maintaining attack efficacy).
+Averages across the three rates: **spectral F1 ≈ 0.23, ensemble F1 ≈ 0.15.**
+Spectral outperforms the feature-space ensemble at 10% and 20%, and ties at 5%.
 
-4. **Semantic backdoors** — Triggers that use natural features (e.g., "all images with sunglasses → target class") are virtually undetectable without domain knowledge.
-
-5. **Distributed/multi-target attacks** — Our methods assume a single-target attack; distributed attacks across multiple classes reduce per-class signal.
-
----
-
-## Recommendations for Users
-
-### When to use each method:
-
-| Scenario | Recommended Method | Expected Efficacy |
-|----------|-------------------|-------------------|
-| Tabular data, moderate poison rate | Feature-space | High (AUC > 0.80) |
-| Known label-flip attack, > 5% rate | Spectral | High (AUC > 0.80) |
-| Neural network, post-training audit | Activation clustering | Moderate (AUC ~0.75) |
-| Real-time monitoring, catch obvious attacks | Streaming ensemble | Moderate (catches ~65%) |
-| Image data, subtle attack | **Not recommended alone** | Low — combine with other defenses |
-
-### Defense-in-depth strategy:
-
-For production ML pipelines, we recommend a layered approach:
-
-1. **Streaming (real-time):** Catch obvious anomalies before they enter the training set. Accept that recall is low.
-
-2. **Batch audit (daily):** Run spectral + feature-space on the day's accumulated data. Higher recall than streaming.
-
-3. **Post-training verification:** After model training, run activation clustering to detect attacks that evaded pre-training defenses.
-
-4. **Model behavior monitoring:** Monitor model predictions for unexpected behavior (out of scope for this tool, but critical).
-
-### Improving efficacy for your use case:
-
-1. **Use meaningful feature representations:** Raw pixels → pretrained embeddings improves image AUC from 0.54 to ~0.67.
-
-2. **Tune threshold per modality:** Tabular and image data need different thresholds. Default (3.0) is conservative.
-
-3. **Combine with data provenance:** If you can track data sources, restrict detection to untrusted sources.
-
-4. **Increase poison budget assumptions:** If you expect > 5% poison rate, spectral methods are highly effective.
+**Interpretation:** Label-flip attacks do not change a sample's features, so
+feature-space methods (z-score, IQR, Isolation Forest) are fundamentally limited
+against them. Spectral analysis conditions on the assigned label and is therefore
+somewhat more sensitive, but absolute recall remains low, especially below ~10%
+poison. These low numbers are the honest result, not a bug.
 
 ---
 
-## Improvement Roadmap
+## Measured baseline — real CIFAR-10 (raw pixels)
 
-Planned improvements to detection efficacy:
+Source: `benchmarks/BENCHMARK_METADATA.md`.
 
-### Short-term (next release)
-- [ ] Add pretrained embedding extraction for image data
-- [ ] Implement STRIP (STRong Intentional Perturbation) for backdoor detection
-- [ ] Add per-modality threshold auto-tuning
+- **Dataset:** CIFAR-10 training set, 10% random label flip.
+- **Features:** raw flattened pixels (3072 dims).
+- **Method:** feature-space ensemble.
+- **Result:** AUC ≈ **0.53–0.56** (near random).
 
-### Medium-term (3-6 months)
-- [ ] Neural Cleanse implementation for trigger reconstruction
-- [ ] Frequency-domain analysis for image backdoors
-- [ ] Federated detection for distributed training
-
-### Long-term (research)
-- [ ] Meta-learning based detection (train a detector on known attacks)
-- [ ] Certified robustness guarantees (provable bounds on undetected poison)
-- [ ] Adaptive methods that adjust to attacker strategy
+Feature-space methods on raw pixels cannot detect label-only corruption. This is
+expected and is documented as a known limitation, not a capability.
 
 ---
 
-## How to Run Efficacy Benchmarks
+## Streaming throughput (not a detection-quality claim)
+
+Source: `benchmarks/BENCHMARK_METADATA.md` + `benchmarks/throughput_tracker.py`.
+
+- The z-score / IQR streaming path scores roughly **~12,000 samples/sec** (20-dim
+  features, Isolation Forest refit excluded), on the reference machine documented
+  in `BENCHMARK_METADATA.md`.
+- **Caveat:** with the default periodic Isolation Forest refit enabled, sustained
+  throughput is far lower because the refit dominates. `throughput_tracker.py`
+  falls back to a lightweight stub detector if the optional streaming extras are
+  not installed — see the script header. Throughput is a performance figure, **not**
+  a detection-quality figure.
+
+---
+
+## What this tool does NOT do
+
+1. **Activation clustering** — *not implemented.* (An earlier version of this doc
+   listed activation-clustering AUCs. There is no activation-clustering module in
+   `src/poison_detector/`; those numbers were removed as unbacked.)
+2. **High-recall label-flip detection** — recall is low, especially < 10% poison.
+3. **Clean-label attacks** — statistically indistinguishable from clean data
+   without model training.
+4. **Low-rate attacks (< ~5%)** — signal-to-noise too low for these statistical
+   methods.
+5. **Image-domain backdoors on raw pixels** — near-random (AUC ~0.54).
+6. **Adaptive attacks** — an attacker aware of these methods can evade them.
+
+---
+
+## Recommended use (defense-in-depth)
+
+This tool is a **screening layer**, best combined with data provenance controls,
+batch audits on trusted representations, and post-training model behavior
+monitoring. Do not rely on it as a sole poisoning control. For label-flip
+screening, spectral analysis on **model embeddings** (not raw pixels) and higher
+assumed poison budgets (≥ 10%) give the best of the currently-implemented results.
+
+---
+
+## How to reproduce every number in this document
 
 ```bash
-# Run full benchmark suite with honest AUC reporting
-python benchmarks/throughput_tracker.py --output results.json
+python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e .
 
-# Output includes:
-# - auc_backdoor: AUC on backdoor attacks
-# - auc_label_flip: AUC on label-flip attacks  
-# - auc_subtle: AUC on subtle perturbation attacks
-# - streaming throughput and latency
+# Label-flip benchmark (writes results/spectral_benchmark.json):
+python benchmark/cifar10_label_flip_benchmark.py
+
+# Streaming throughput (writes/report to stdout):
+python benchmarks/throughput_tracker.py
 ```
 
-Results are tracked in CI. See `.github/workflows/release.yml` for the automated benchmark gate.
+The label-flip F1 table above is a direct transcription of
+`results/spectral_benchmark.json`. If your run differs, the artifact — not this
+prose — is the source of truth.
 
 ---
 
 ## References
 
 - Tran, B., Li, J., Madry, A. (2018). "Spectral Signatures in Backdoor Attacks." NeurIPS.
-- Chen, B., et al. (2019). "Detecting Backdoor Attacks on Deep Neural Networks by Activation Clustering."
-- Peri, N., et al. (2020). "Deep k-NN Defense Against Clean-Label Data Poisoning Attacks." ECCV.
-- Gao, Y., et al. (2019). "STRIP: A Defence Against Trojan Attacks on Deep Neural Networks." ACSAC.
+- Chen, B., et al. (2019). "Detecting Backdoor Attacks on Deep Neural Networks by Activation Clustering." *(method referenced for context; not implemented here)*

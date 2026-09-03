@@ -17,7 +17,10 @@ python -m venv .venv
 source .venv/bin/activate
 # Windows PowerShell:
 .venv\Scripts\Activate.ps1
+# Core library only:
 pip install -e .
+# To run the test suite (pytest, PyYAML, etc.) install the dev extras:
+pip install -e ".[dev]"
 ```
 
 ## Pick the right method for the attack

@@ -134,7 +134,7 @@ redis-cli -h redis ping
 1. If a single ensemble method is slow, disable it temporarily:
    ```bash
    curl -X POST http://detector:8080/config \
-     -d '{"ensemble_methods": ["feature_space", "activation_clustering"]}'
+     -d '{"ensemble_methods": ["zscore", "iqr"]}'  # drop "isolation" if refit is the bottleneck
    ```
 2. Increase consumer batch size to improve throughput:
    ```bash

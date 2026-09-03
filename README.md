@@ -320,7 +320,7 @@ The repository includes `benchmark/cifar10_label_flip_benchmark.py` which evalua
 | Metric | Value |
 |--------|-------|
 | Detection AUC (feature-space ensemble) | 0.53 - 0.56 |
-| Detection AUC (spectral signatures) | Higher (label-aware) |
+| Spectral label-flip F1 (synthetic separable data) | 0.08 / 0.23 / 0.37 @ 5% / 10% / 20% poison |
 | Streaming throughput (z-score/IQR path, refit excluded) | ~12,400 samples/sec |
 | Streaming throughput (default config, with periodic IsolationForest refit) | far lower — refit dominates; tune `refit_interval` |
 | Latency p50 | 0.08 ms |
@@ -365,7 +365,7 @@ The engineering value of this project is primarily in the streaming infrastructu
 | Monitoring and alerting | Yes | Prometheus metrics, Grafana dashboards, multi-channel alerts |
 | Streaming support | Yes | Kafka consumer, 12,400 samples/sec throughput |
 | Quarantine storage | Yes | Redis (streaming) + SQLite (batch) |
-| Test coverage | Yes | 12 test modules, 131 tests passing, covering all components incl. input-validation hardening |
+| Test coverage | Yes | 12 test modules, 122 tests collected and passing (1 skipped), covering all components incl. input-validation hardening |
 | CI/CD | Yes | GitHub Actions (`.github/` directory) |
 | Runbook | Yes | `RUNBOOK.md` with operational procedures |
 | Changelog | Yes | `CHANGELOG.md` with version history |
