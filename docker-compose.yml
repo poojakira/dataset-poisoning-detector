@@ -2,7 +2,7 @@
 #
 # Security note:
 #   This compose file is for local evaluation. It exposes service ports, uses plaintext
-#   Kafka, and defaults Grafana credentials for convenience. Do not deploy it as a
+#   Kafka, and requires an explicit Grafana admin password. Do not deploy it as a
 #   production stack without private bindings, broker/auth hardening, TLS, secret
 #   management, and tenant-scoped API authentication.
 #
@@ -134,7 +134,7 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-detector}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
