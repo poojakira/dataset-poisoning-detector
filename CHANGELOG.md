@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.2.0 (2024-01-20)
+## Provenance correction
+
+The original changelog used 2024 dates for versions 0.1.0 and 0.2.0. Git history shows this repository began on 2026-07-11, and the changelog itself was first added that day. Those earlier labels were not supported by repository history and have been corrected to 2026-07-11. This correction preserves Git history rather than backdating it.
+
+## 0.2.0 (2026-07-11)
 
 ### Added
 - **Real-time streaming detection** via `StreamingDetector` with O(1) rolling statistics
@@ -31,7 +35,7 @@
 - Version bumped to 0.2.0
 - `__init__.py` now conditionally imports real-time modules when deps are available
 
-## 0.1.0 (2024-01-15)
+## 0.1.0 (2026-07-11)
 
 ### Added
 - Z-score anomaly detection (pure Python, no numpy dependency)
