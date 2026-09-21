@@ -1,12 +1,8 @@
 # Dataset Poisoning Detector
 
-Statistical screening for training data pipelines. The online z-score/IQR
-scoring path runs at ~12,400 samples/sec (20-dim features, IsolationForest
-refit excluded — see below); the periodic multivariate IsolationForest refit is
-the throughput bottleneck. Flags suspicious samples before they enter your
-training set. **This is a screening layer, not a defense** — on feature-space
-statistics alone it sits near ~0.54 AUC for subtle/image attacks. For label-flip
-attacks, use the label-aware `spectral` method.
+Statistical screening for training-data pipelines. The shipped detector combines feature-space anomaly checks, label-aware spectral analysis, streaming statistics, and operational plumbing for quarantine/monitoring.
+
+**This is a screening layer, not a complete poisoning defense.** The committed benchmarks show weak performance on subtle/label-only scenarios for feature-space methods; use method-specific results and limitations rather than treating a single score as a general detection rate.
 
 ---
 
@@ -119,7 +115,7 @@ How data moves through the system from ingestion to alert:
 7. Flagged samples route to quarantine (Redis) and trigger alerts
 8. Prometheus metrics emit continuously; Grafana dashboards show real-time poison rate, latency, drift status
 
-**API Mode (Production):**
+**API Mode (service integration):**
 1. FastAPI service (`api.py`) exposes REST and WebSocket endpoints
 2. Kafka consumer ingests samples from the training data pipeline topic
 3. Each sample scored in-process; results written to Redis quarantine if flagged
@@ -321,13 +317,10 @@ The repository includes `benchmark/cifar10_label_flip_benchmark.py` which evalua
 |--------|-------|
 | Detection AUC (feature-space ensemble) | 0.53 - 0.56 |
 | Spectral label-flip F1 (synthetic separable data) | 0.08 / 0.23 / 0.37 @ 5% / 10% / 20% poison |
-| Streaming throughput (z-score/IQR path, refit excluded) | ~12,400 samples/sec |
-| Streaming throughput (default config, with periodic IsolationForest refit) | far lower — refit dominates; tune `refit_interval` |
-| Latency p50 | 0.08 ms |
-| Latency p99 | 0.31 ms |
+| Streaming performance | No portable headline number | Real implementation benchmarked by `benchmarks/throughput_tracker.py`; report the generated artifact + environment. Periodic IsolationForest refits are excluded from the fast-path microbenchmark. |
 | Ensemble strategy | Majority vote (>= 2/3 agree) |
 
-> See `benchmarks/BENCHMARK_METADATA.md` for full methodology. Throughput measured locally on M2/16GB with 20-dimensional features; varies with hardware and configuration.
+> See `benchmarks/BENCHMARK_METADATA.md` for the evidence policy. The former local ~12.4k samples/sec number is not treated as a current verified claim because its original artifact was not commit-pinned and the old benchmark could fall back to a stub.
 
 ### Honest Assessment
 
@@ -356,14 +349,14 @@ The engineering value of this project is primarily in the streaming infrastructu
 
 ---
 
-## Production Readiness Assessment
+## Implementation Status
 
 | Criterion | Status | Notes |
 |-----------|--------|-------|
 | Containerized deployment | Yes | Multi-stage Docker, non-root user, health checks |
 | Configuration management | Yes | Pydantic-settings with env var override |
 | Monitoring and alerting | Yes | Prometheus metrics, Grafana dashboards, multi-channel alerts |
-| Streaming support | Yes | Kafka consumer, 12,400 samples/sec throughput |
+| Streaming support | Implemented | Kafka consumer plus real `StreamingDetector`; performance must be reported from a generated benchmark artifact with environment and configuration |
 | Quarantine storage | Yes | Redis (streaming) + SQLite (batch) |
 
 > **Storage boundary:** `PostgresStore` is a deliberate stub and raises `NotImplementedError`; PostgreSQL quarantine persistence is **not implemented or supported** in the current repository. Supported paths are Redis for streaming quarantine and SQLite for batch/local storage.
