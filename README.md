@@ -16,7 +16,7 @@ I built this because we kept getting bitten by slow data corruption. A vendor fe
 
 This tool sits at the ingestion boundary (MITRE ATLAS AML.T0020) and applies statistical tests to every incoming sample. It won't catch sophisticated targeted attacks, but it catches the dumb stuff fast: corrupted feature vectors, distribution shifts, gross outliers. It produces structured logs so you have an audit trail of what went into training and what got flagged.
 
-It integrates with Kafka for streaming, exports Prometheus metrics, and ships with Docker and Grafana configs. You can deploy it in front of an existing pipeline without changing your training code.
+It integrates with Kafka for streaming, exports Prometheus metrics, and ships with Docker and Grafana configs. It is designed to integrate at the ingestion boundary, but production deployment still requires environment-specific authentication, storage, observability, and failure-handling decisions.
 
 ---
 
@@ -119,7 +119,7 @@ How data moves through the system from ingestion to alert:
 7. Flagged samples route to quarantine (Redis) and trigger alerts
 8. Prometheus metrics emit continuously; Grafana dashboards show real-time poison rate, latency, drift status
 
-**API Mode (Production):**
+**API Mode (service integration):**
 1. FastAPI service (`api.py`) exposes REST and WebSocket endpoints
 2. Kafka consumer ingests samples from the training data pipeline topic
 3. Each sample scored in-process; results written to Redis quarantine if flagged
@@ -251,7 +251,7 @@ report = detect(X, method="spectral", labels=y)
 print(f"Spectral detected {report.poisoned_count} mislabeled samples")
 ```
 
-### Docker Deployment
+### Docker-based local/service deployment
 
 ```bash
 # Full stack: API + Redis + Kafka + Prometheus + Grafana
