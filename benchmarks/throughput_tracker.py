@@ -1,172 +1,27 @@
 #!/usr/bin/env python3
+"""Reproducible benchmark for the shipped dataset-poisoning-detector implementation.
+
+Important evidence boundary:
+- This script imports the real package from poison_detector.
+- It never falls back to a test stub.
+- --ci is a sanity/reproducibility gate, not a hardware performance SLA.
+- Report throughput with its environment and configuration; do not generalize it.
 """
-Throughput & efficacy tracker for dataset-poisoning-detector.
 
-Produces honest performance baselines:
-- StreamingDetector throughput (samples/sec)
-- Ensemble detect() latency (ms)
-- Detection efficacy (AUC) on synthetic data with known poison rate
-- CI gate assertion: throughput > 10,000 samples/sec
-
-Usage:
-    python benchmarks/throughput_tracker.py [--output results.json] [--ci]
-
-Outputs JSON report to stdout or file.
-"""
+from __future__ import annotations
 
 import argparse
 import json
-import time
+import math
+import platform
 import sys
-import os
-import statistics
-from dataclasses import dataclass, asdict
+import time
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
 
-# Attempt real imports; fall back to local stubs for CI bootstrapping
-try:
-    from dataset_poisoning_detector.streaming import StreamingDetector
-    from dataset_poisoning_detector.ensemble import EnsembleDetector
-except ImportError:
-    # Use stubs that mirror expected interface for benchmarking
-    sys.path.insert(0, str(Path(__file__).parent.parent / "tests"))
-    from test_streaming_integration import StreamingDetector
-
-    class EnsembleDetector:
-        """Stub ensemble detector for benchmarking."""
-
-        def __init__(self, methods=None):
-            self.methods = methods or ["spectral", "feature_space", "activation_clustering"]
-
-        def detect(self, features: np.ndarray, labels: np.ndarray) -> dict:
-            """Run all ensemble methods and aggregate scores."""
-            n = len(features)
-            scores = np.zeros(n)
-            for method in self.methods:
-                if method == "spectral":
-                    # SVD-based spectral signature
-                    centered = features - features.mean(axis=0)
-                    try:
-                        _, s, vt = np.linalg.svd(centered, full_matrices=False)
-                        top_component = vt[0]
-                        projections = np.abs(centered @ top_component)
-                        scores += projections / (projections.std() + 1e-8)
-                    except np.linalg.LinAlgError:
-                        scores += np.random.rand(n) * 0.1
-                elif method == "feature_space":
-                    # Distance to class centroids
-                    unique_labels = np.unique(labels)
-                    for lbl in unique_labels:
-                        mask = labels == lbl
-                        if mask.sum() < 2:
-                            continue
-                        centroid = features[mask].mean(axis=0)
-                        dists = np.linalg.norm(features[mask] - centroid, axis=1)
-                        z_scores = (dists - dists.mean()) / (dists.std() + 1e-8)
-                        scores[mask] += z_scores
-                elif method == "activation_clustering":
-                    # K-means proxy: distance to overall centroid
-                    centroid = features.mean(axis=0)
-                    dists = np.linalg.norm(features - centroid, axis=1)
-                    scores += (dists - dists.mean()) / (dists.std() + 1e-8)
-
-            # Normalize to [0, 1]
-            scores = scores / len(self.methods)
-            min_s, max_s = scores.min(), scores.max()
-            if max_s - min_s > 1e-8:
-                scores = (scores - min_s) / (max_s - min_s)
-            return {"scores": scores, "threshold": 0.5}
-
-
-# ---------------------------------------------------------------------------
-# Data generation
-# ---------------------------------------------------------------------------
-
-def generate_benchmark_dataset(
-    n_clean: int = 10000,
-    n_poisoned: int = 500,
-    dim: int = 128,
-    poison_type: str = "backdoor",
-    seed: int = 42,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Generate synthetic dataset with known poison labels.
-
-    Returns:
-        features: (n_clean + n_poisoned, dim) array
-        labels: class labels
-        is_poisoned: binary ground truth (1 = poisoned)
-    """
-    rng = np.random.RandomState(seed)
-
-    # Clean samples: 10-class Gaussian mixture
-    clean_features = rng.randn(n_clean, dim)
-    clean_labels = rng.randint(0, 10, n_clean)
-    # Add class-specific offsets for structure
-    for c in range(10):
-        mask = clean_labels == c
-        clean_features[mask] += rng.randn(dim) * 0.3
-
-    # Poisoned samples
-    poison_features = rng.randn(n_poisoned, dim)
-    poison_labels = np.zeros(n_poisoned, dtype=int)  # target class 0
-
-    if poison_type == "backdoor":
-        # Strong backdoor trigger in first 8 dims
-        poison_features[:, :8] = 8.0 + rng.uniform(0, 1, (n_poisoned, 8))
-    elif poison_type == "label_flip":
-        # Use clean distribution but flip labels
-        poison_features = clean_features[:n_poisoned].copy() + rng.randn(n_poisoned, dim) * 0.1
-        poison_labels = (clean_labels[:n_poisoned] + 1) % 10
-    elif poison_type == "subtle":
-        # Very subtle perturbation — harder to detect
-        poison_features[:, :4] += 1.5
-
-    features = np.vstack([clean_features, poison_features])
-    labels = np.concatenate([clean_labels, poison_labels])
-    is_poisoned = np.concatenate([np.zeros(n_clean), np.ones(n_poisoned)])
-
-    # Shuffle
-    perm = rng.permutation(len(features))
-    return features[perm], labels[perm], is_poisoned[perm]
-
-
-# ---------------------------------------------------------------------------
-# Benchmark functions
-# ---------------------------------------------------------------------------
-
-def compute_auc(y_true: np.ndarray, y_scores: np.ndarray) -> float:
-    """Compute AUC-ROC without sklearn dependency."""
-    # Sort by decreasing score
-    order = np.argsort(-y_scores)
-    y_sorted = y_true[order]
-
-    n_pos = y_true.sum()
-    n_neg = len(y_true) - n_pos
-    if n_pos == 0 or n_neg == 0:
-        return 0.5
-
-    tp = 0
-    fp = 0
-    auc = 0.0
-    prev_fpr = 0.0
-    prev_tpr = 0.0
-
-    for i in range(len(y_sorted)):
-        if y_sorted[i] == 1:
-            tp += 1
-        else:
-            fp += 1
-        tpr = tp / n_pos
-        fpr = fp / n_neg
-        # Trapezoidal rule
-        auc += (fpr - prev_fpr) * (tpr + prev_tpr) / 2
-        prev_fpr = fpr
-        prev_tpr = tpr
-
-    return float(auc)
+from poison_detector import StreamingDetector, detect
 
 
 @dataclass
@@ -174,170 +29,194 @@ class BenchmarkResult:
     streaming_throughput_samples_per_sec: float
     streaming_latency_p50_ms: float
     streaming_latency_p99_ms: float
+    streaming_samples: int
+    feature_dimensions: int
+    streaming_refit_enabled: bool
     ensemble_latency_ms: float
     ensemble_throughput_samples_per_sec: float
-    auc_backdoor: float
-    auc_label_flip: float
-    auc_subtle: float
-    ci_gate_passed: bool
-    timestamp: str
+    efficacy_auc_backdoor: float
+    efficacy_auc_label_flip: float
+    efficacy_auc_subtle: float
+    efficacy_samples_per_scenario: int
+    python: str
+    platform: str
+    numpy: str
+    ci_sanity_passed: bool
+    timestamp_utc: str
     notes: str
 
 
-def benchmark_streaming_throughput(n_samples: int = 50000, dim: int = 128) -> dict:
-    """Measure streaming detector throughput."""
-    detector = StreamingDetector({"threshold": 3.0, "drift_window": 1000})
-    rng = np.random.RandomState(0)
+def generate_benchmark_dataset(
+    n_clean: int,
+    n_poisoned: int,
+    dim: int,
+    poison_type: str,
+    seed: int = 42,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(seed)
+    clean = rng.normal(0.0, 1.0, (n_clean, dim))
+    clean_labels = rng.integers(0, 10, n_clean)
 
-    # Pre-generate samples to exclude generation time from measurement
-    samples = []
-    for i in range(n_samples):
-        samples.append({
-            "id": f"bench-{i}",
-            "features": rng.randn(dim).tolist(),
-            "label": int(rng.randint(0, 10)),
-            "metadata": {},
-        })
+    poisoned = rng.normal(0.0, 1.0, (n_poisoned, dim))
+    poison_labels = np.zeros(n_poisoned, dtype=int)
 
-    # Warmup
-    for s in samples[:100]:
-        detector.ingest(s)
+    if poison_type == "backdoor":
+        width = min(8, dim)
+        poisoned[:, :width] = 8.0 + rng.uniform(0.0, 1.0, (n_poisoned, width))
+    elif poison_type == "label_flip":
+        poisoned = clean[:n_poisoned].copy()
+        poison_labels = (clean_labels[:n_poisoned] + 1) % 10
+    elif poison_type == "subtle":
+        poisoned[:, : min(4, dim)] += 1.5
+    else:
+        raise ValueError(f"unknown poison_type: {poison_type}")
 
-    # Timed run
-    latencies = []
-    start_total = time.perf_counter()
-    for s in samples[100:]:
+    features = np.vstack([clean, poisoned])
+    labels = np.concatenate([clean_labels, poison_labels])
+    truth = np.concatenate(
+        [np.zeros(n_clean, dtype=int), np.ones(n_poisoned, dtype=int)]
+    )
+    order = rng.permutation(len(features))
+    return features[order], labels[order], truth[order]
+
+
+def compute_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
+    """Rank-based ROC AUC without an additional dependency."""
+    y_true = np.asarray(y_true, dtype=int)
+    y_score = np.asarray(y_score, dtype=float)
+    n_pos = int(y_true.sum())
+    n_neg = int(len(y_true) - n_pos)
+    if n_pos == 0 or n_neg == 0:
+        return 0.5
+
+    order = np.argsort(y_score)
+    ranks = np.empty_like(order, dtype=float)
+    ranks[order] = np.arange(1, len(y_score) + 1, dtype=float)
+    pos_rank_sum = float(ranks[y_true == 1].sum())
+    auc = (pos_rank_sum - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)
+    return float(auc)
+
+
+def benchmark_streaming(n_samples: int, dim: int) -> dict[str, float]:
+    # This is deliberately a no-refit fast-path microbenchmark.
+    detector = StreamingDetector(
+        refit_interval=n_samples + 1,
+        window_size=max(n_samples + 100, 1000),
+    )
+    rng = np.random.default_rng(0)
+    samples = rng.normal(0.0, 1.0, (n_samples + 100, dim))
+
+    for row in samples[:100]:
+        detector.score_sample(row)
+
+    latencies: list[float] = []
+    started = time.perf_counter()
+    for row in samples[100:]:
         t0 = time.perf_counter()
-        detector.ingest(s)
-        latencies.append((time.perf_counter() - t0) * 1000)  # ms
-    elapsed = time.perf_counter() - start_total
+        detector.score_sample(row)
+        latencies.append((time.perf_counter() - t0) * 1000.0)
+    elapsed = time.perf_counter() - started
 
-    measured_count = n_samples - 100
-    throughput = measured_count / elapsed
-    latencies.sort()
-    p50 = latencies[len(latencies) // 2]
-    p99 = latencies[int(len(latencies) * 0.99)]
-
+    arr = np.asarray(latencies, dtype=float)
     return {
-        "throughput": throughput,
-        "p50_ms": p50,
-        "p99_ms": p99,
-        "total_seconds": elapsed,
-        "samples_measured": measured_count,
-    }
-
-
-def benchmark_ensemble_detection(n_samples: int = 10000, dim: int = 128) -> dict:
-    """Measure ensemble detection latency."""
-    features, labels, _ = generate_benchmark_dataset(n_samples, 500, dim, "backdoor")
-    detector = EnsembleDetector()
-
-    # Warmup
-    detector.detect(features[:100], labels[:100])
-
-    # Timed run
-    start = time.perf_counter()
-    result = detector.detect(features, labels)
-    elapsed = time.perf_counter() - start
-
-    return {
-        "latency_ms": elapsed * 1000,
         "throughput": n_samples / elapsed,
-        "n_samples": n_samples,
+        "p50_ms": float(np.percentile(arr, 50)),
+        "p99_ms": float(np.percentile(arr, 99)),
     }
 
 
-def benchmark_detection_efficacy(dim: int = 128) -> dict:
-    """Measure detection AUC on different poison types (honest numbers)."""
-    results = {}
-    detector = EnsembleDetector()
+def benchmark_ensemble(n_samples: int, dim: int) -> dict[str, float]:
+    rng = np.random.default_rng(7)
+    features = rng.normal(0.0, 1.0, (n_samples, dim)).tolist()
+    started = time.perf_counter()
+    detect(features, method="ensemble")
+    elapsed = time.perf_counter() - started
+    return {
+        "latency_ms": elapsed * 1000.0,
+        "throughput": n_samples / elapsed,
+    }
 
-    for poison_type in ["backdoor", "label_flip", "subtle"]:
-        features, labels, is_poisoned = generate_benchmark_dataset(
-            n_clean=5000, n_poisoned=250, dim=dim, poison_type=poison_type
+
+def benchmark_efficacy(n_total: int, dim: int) -> dict[str, float]:
+    n_poisoned = max(10, n_total // 20)
+    n_clean = n_total - n_poisoned
+    out: dict[str, float] = {}
+    for poison_type in ("backdoor", "label_flip", "subtle"):
+        features, _labels, truth = generate_benchmark_dataset(
+            n_clean=n_clean,
+            n_poisoned=n_poisoned,
+            dim=dim,
+            poison_type=poison_type,
         )
-        detection = detector.detect(features, labels)
-        scores = detection["scores"]
-        auc = compute_auc(is_poisoned, scores)
-        results[poison_type] = {
-            "auc": round(auc, 4),
-            "n_clean": 5000,
-            "n_poisoned": 250,
-            "poison_rate": 250 / 5250,
-        }
-        print(f"  {poison_type}: AUC = {auc:.4f}")
-
-    return results
+        report = detect(features.tolist(), method="ensemble")
+        scores = np.asarray([r.anomaly_score for r in report.per_sample], dtype=float)
+        out[poison_type] = compute_auc(truth, scores)
+    return out
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+def run_all(stream_samples: int, dim: int, efficacy_samples: int) -> BenchmarkResult:
+    streaming = benchmark_streaming(stream_samples, dim)
+    ensemble = benchmark_ensemble(efficacy_samples, dim)
+    efficacy = benchmark_efficacy(efficacy_samples, dim)
 
-def run_all_benchmarks() -> BenchmarkResult:
-    """Run all benchmarks and return consolidated result."""
-    print("=" * 60)
-    print("Dataset Poisoning Detector — Performance Benchmark")
-    print("=" * 60)
-
-    print("\n[1/3] Streaming throughput...")
-    streaming = benchmark_streaming_throughput()
-    print(f"  Throughput: {streaming['throughput']:.0f} samples/sec")
-    print(f"  Latency P50: {streaming['p50_ms']:.3f} ms")
-    print(f"  Latency P99: {streaming['p99_ms']:.3f} ms")
-
-    print("\n[2/3] Ensemble detection latency...")
-    ensemble = benchmark_ensemble_detection()
-    print(f"  Latency: {ensemble['latency_ms']:.1f} ms for {ensemble['n_samples']} samples")
-    print(f"  Throughput: {ensemble['throughput']:.0f} samples/sec")
-
-    print("\n[3/3] Detection efficacy (AUC)...")
-    efficacy = benchmark_detection_efficacy()
-
-    ci_gate_passed = streaming["throughput"] > 10000
-    print(f"\n{'=' * 60}")
-    print(f"CI GATE: throughput > 10,000 samples/sec -> {'PASS' if ci_gate_passed else 'FAIL'}")
-    print(f"  Measured: {streaming['throughput']:.0f} samples/sec")
-    print(f"{'=' * 60}")
+    numeric = [
+        streaming["throughput"],
+        streaming["p50_ms"],
+        streaming["p99_ms"],
+        ensemble["latency_ms"],
+        ensemble["throughput"],
+        *efficacy.values(),
+    ]
+    sanity = all(math.isfinite(v) for v in numeric) and streaming["throughput"] > 0
 
     return BenchmarkResult(
-        streaming_throughput_samples_per_sec=round(streaming["throughput"], 1),
+        streaming_throughput_samples_per_sec=round(streaming["throughput"], 2),
         streaming_latency_p50_ms=round(streaming["p50_ms"], 4),
         streaming_latency_p99_ms=round(streaming["p99_ms"], 4),
+        streaming_samples=stream_samples,
+        feature_dimensions=dim,
+        streaming_refit_enabled=False,
         ensemble_latency_ms=round(ensemble["latency_ms"], 2),
-        ensemble_throughput_samples_per_sec=round(ensemble["throughput"], 1),
-        auc_backdoor=efficacy["backdoor"]["auc"],
-        auc_label_flip=efficacy["label_flip"]["auc"],
-        auc_subtle=efficacy["subtle"]["auc"],
-        ci_gate_passed=ci_gate_passed,
-        timestamp=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        notes="Honest baselines on synthetic data. Real-world efficacy may differ. "
-              "CIFAR-10 AUC ~0.54 with feature-space methods alone.",
+        ensemble_throughput_samples_per_sec=round(ensemble["throughput"], 2),
+        efficacy_auc_backdoor=round(efficacy["backdoor"], 4),
+        efficacy_auc_label_flip=round(efficacy["label_flip"], 4),
+        efficacy_auc_subtle=round(efficacy["subtle"], 4),
+        efficacy_samples_per_scenario=efficacy_samples,
+        python=platform.python_version(),
+        platform=platform.platform(),
+        numpy=np.__version__,
+        ci_sanity_passed=sanity,
+        timestamp_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        notes=(
+            "Streaming number is a no-refit score_sample microbenchmark. "
+            "It excludes periodic IsolationForest refits, network I/O, serialization, "
+            "Kafka, Redis, and API overhead. Efficacy uses the shipped ensemble on "
+            "synthetic fixtures and is not a real-world detection rate."
+        ),
     )
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Benchmark throughput tracker")
-    parser.add_argument("--output", "-o", type=str, help="Output JSON file path")
-    parser.add_argument("--ci", action="store_true", help="CI mode: exit non-zero if gate fails")
+def main() -> dict:
+    parser = argparse.ArgumentParser(description="Dataset poisoning benchmark")
+    parser.add_argument("--output", "-o", type=Path)
+    parser.add_argument("--ci", action="store_true")
+    parser.add_argument("--stream-samples", type=int, default=10_000)
+    parser.add_argument("--dim", type=int, default=20)
+    parser.add_argument("--efficacy-samples", type=int, default=1_000)
     args = parser.parse_args()
 
-    result = run_all_benchmarks()
+    result = run_all(args.stream_samples, args.dim, args.efficacy_samples)
     report = asdict(result)
+    rendered = json.dumps(report, indent=2)
+    print(rendered)
 
     if args.output:
-        output_path = Path(args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w") as f:
-            json.dump(report, f, indent=2)
-        print(f"\nResults written to {output_path}")
-    else:
-        print("\n" + json.dumps(report, indent=2))
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(rendered + "\n", encoding="utf-8")
 
-    if args.ci and not result.ci_gate_passed:
-        print("\n❌ CI GATE FAILED: throughput below 10,000 samples/sec")
-        sys.exit(1)
-
+    if args.ci and not result.ci_sanity_passed:
+        print("Benchmark sanity gate failed", file=sys.stderr)
+        raise SystemExit(1)
     return report
 
 
