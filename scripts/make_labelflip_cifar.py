@@ -21,6 +21,7 @@ CIFAR-10 data directory:
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import pickle
 import numpy as np
@@ -28,6 +29,25 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
 NUM_CLASSES = 10
+
+# Official CIFAR-10 Python training-batch MD5 values used by torchvision.
+# Pickle is unsafe for attacker-controlled bytes, so this benchmark helper
+# verifies the exact official batch checksum before deserializing.
+_OFFICIAL_CIFAR10_TRAIN_MD5 = {
+    "data_batch_1": "c99cafc152244af753f735de768cd75f",
+    "data_batch_2": "d4bba439e000b95fd0a9bffe97cbabec",
+    "data_batch_3": "54ebc095f3ab1f0389bbae665268c751",
+    "data_batch_4": "634d18415352ddfa80567beed471001a",
+    "data_batch_5": "482c414d41f54cd18b22e5b47cb7c3cb",
+}
+
+
+def _md5_file(path: str) -> str:
+    digest = hashlib.md5(usedforsecurity=False)
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def get_cifar_dir() -> str:
@@ -57,7 +77,13 @@ def get_cifar_dir() -> str:
 
 
 def load_cifar_batches(cifar_dir: str | None = None):
-    """Load and concatenate all training batches. Returns (X uint8 [N,3072], y int [N]).
+    """Load verified official CIFAR-10 training batches.
+
+    The Python-format CIFAR files are pickles. Because pickle deserialization
+    can execute attacker-controlled payloads, this helper refuses to load a
+    batch unless its MD5 exactly matches the official torchvision checksum.
+
+    Returns (X uint8 [N,3072], y int [N]).
 
     Args:
         cifar_dir: Path to the cifar-10-batches-py directory. If None, reads
@@ -77,8 +103,16 @@ def load_cifar_batches(cifar_dir: str | None = None):
         path = os.path.join(cifar_dir, f"data_batch_{i}")
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Missing CIFAR batch: {path} (fail closed).")
+        filename = f"data_batch_{i}"
+        expected_md5 = _OFFICIAL_CIFAR10_TRAIN_MD5[filename]
+        observed_md5 = _md5_file(path)
+        if observed_md5 != expected_md5:
+            raise ValueError(
+                f"Refusing to deserialize unverified CIFAR pickle {path}: "
+                f"MD5 {observed_md5} != official {expected_md5}"
+            )
         with open(path, "rb") as f:
-            d = pickle.load(f, encoding="bytes")
+            d = pickle.load(f, encoding="bytes")  # noqa: S301 - checksum-gated official dataset
         xs.append(d[b"data"])
         ys.append(np.array(d[b"labels"], dtype=np.int64))
     X = np.concatenate(xs, axis=0)  # [50000, 3072] uint8
