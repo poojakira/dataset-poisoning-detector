@@ -1,26 +1,21 @@
-# Benchmark Metadata
+# Benchmark Methodology
 
-## Streaming Throughput: ~12,400 samples/sec
+Performance numbers in this repository must be tied to a generated JSON artifact, the exact code revision, and the execution environment.
 
-- **Metric**: Samples scored per second in streaming mode
-- **Method**: `StreamingDetector.score_sample()` called in tight loop
-- **Feature dimensions**: 20 (float64)
-- **Batch size**: 1 (single-sample scoring)
-- **Detector config**: Z-score + IQR (IsolationForest refit disabled during measurement)
-- **Hardware**: Apple M2 / 16GB RAM (local benchmark)
-- **Python**: 3.12
-- **Duration**: 10,000 samples measured after 5,000 warm-up
-- **Percentile**: Median throughput across 5 runs
-- **Commit**: (insert current HEAD commit)
-- **Date**: 2026-08-27
-- **Excludes**: IsolationForest refit time, network I/O, serialization
-- **Note**: Throughput varies with feature dimensionality and hardware. This is a local benchmark result, not a universal performance guarantee.
+## Streaming microbenchmark
 
-## CIFAR-10 Label-Flip AUC: 0.53-0.56
+`benchmarks/throughput_tracker.py` now imports the shipped `poison_detector.StreamingDetector` directly. It does **not** fall back to a test stub.
 
-- **Dataset**: CIFAR-10 training set (50,000 samples)
-- **Attack**: Random label flip at 10% poison rate
-- **Method**: Feature-space ensemble (Z-score + IQR + IsolationForest)
-- **Feature extraction**: Raw flattened pixel values (3072 dimensions)
-- **Script**: `benchmark/cifar10_label_flip_benchmark.py`
-- **Note**: Near-random performance is expected and documented. Feature-space methods cannot detect label-only corruption.
+The streaming measurement is deliberately scoped to the no-refit `score_sample()` fast path: 20 features by default, single-sample scoring, periodic IsolationForest refits disabled for the timed window, and network/Kafka/Redis/API/serialization overhead excluded.
+
+This is a microbenchmark, not default deployment throughput. The default detector periodically refits IsolationForest, which can dominate wall-clock time.
+
+## Efficacy fixture
+
+The benchmark invokes the shipped `poison_detector.detect(..., method="ensemble")` implementation against seeded synthetic backdoor, label-flip, and subtle fixtures. Those AUC values are regression measurements for the fixture generator, not real-world poisoning-detection rates.
+
+## Evidence policy
+
+Do not copy a throughput or latency value into the README, résumé, portfolio, or dashboard unless the corresponding benchmark JSON artifact and environment are available. A hardware-independent CI performance SLA is intentionally not used.
+
+The previous local "~12,400 samples/sec" note did not record a commit SHA and the old benchmark script could silently fall back to a stub implementation. It is therefore historical context only and is not a current verified claim.
