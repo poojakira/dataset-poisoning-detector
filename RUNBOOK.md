@@ -91,26 +91,15 @@ silently returning "0 flagged":
 - `StreamingDetector.score_sample`: empty vector, `NaN`/`inf`, wrong ndim, or a
   feature-count change mid-stream → `ValueError`
 
-## Streaming throughput (measured — read the caveat)
+## Streaming benchmark
 
-`benchmarks/throughput_tracker.py` runs, but note it falls back to a **stub**
-detector (the real class lives at `poison_detector.stream.StreamingDetector`,
-not the import path the tracker tries first), so its `>10,000 samples/sec`
-number reflects the stub, not the shipped detector.
-
-Measured on the **real** `StreamingDetector.score_sample` (20-dim samples, this machine):
-
-- **Statistical (Welford z-score) path, refit disabled:** ~11,800 samples/sec
-- **Default config (periodic IsolationForest refit every 1000 samples on a
-  10k-sample window):** ~56 samples/sec — the periodic refit dominates.
-
-So the honest statement is: the online statistical check is fast (~10k+/sec),
-but the multivariate refit is the throughput bottleneck. Tune `refit_interval`
-(or disable refits) to trade multivariate recall for speed.
+`benchmarks/throughput_tracker.py` imports the shipped `poison_detector.StreamingDetector` directly. It has no stub fallback.
 
 ```bash
-python benchmarks/throughput_tracker.py            # runs; uses stub detector
+python benchmarks/throughput_tracker.py --output benchmark-results.json
 ```
+
+The streaming number is a **no-refit microbenchmark**. It excludes periodic IsolationForest refits, network I/O, serialization, Kafka, Redis, and API overhead. Treat the JSON artifact and its recorded environment as the evidence; do not quote a hardware-independent throughput guarantee.
 
 ## Interpret Results
 
@@ -126,9 +115,7 @@ python benchmarks/throughput_tracker.py            # runs; uses stub detector
 pytest -q
 ```
 
-Verified: **131 tests pass** (covers detector methods + input-validation
-hardening, spectral, statistical, isolation, streaming, drift, attribution,
-fingerprint, pipeline, API, and the URL scanner).
+Current GitHub Actions baseline (Python 3.12, 2026-09-21): **122 passed, 1 skipped** at **50.94% statement coverage**. Re-check the current CI run before copying these numbers into external material.
 
 ## Lint / Format / Security
 
@@ -151,4 +138,4 @@ itself, which is expected — it isn't published to PyPI.)
 | Low recall on label-flip with `ensemble` | Expected — use `method="spectral"` with labels |
 | Many flags on clean-ish data with `ensemble` | Expected — ~0.54 AUC; screen, then review manually |
 | `ModuleNotFoundError: poison_detector` | Run `pip install -e .` from repo root |
-| Streaming throughput far below 10k/sec | Periodic IsolationForest refit; raise `refit_interval` |
+| Streaming throughput differs from a prior run | Expected across hardware/configuration. Check whether refits are enabled and compare only like-for-like benchmark artifacts. |
