@@ -1,5 +1,7 @@
 # Dataset Poisoning Detector
 
+**Repository owner & maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira)) — I review changes, verify public claims, and maintain the repository record.
+
 Statistical screening for training data pipelines. The online z-score/IQR
 scoring path runs at ~12,400 samples/sec (20-dim features, IsolationForest
 refit excluded — see below); the periodic multivariate IsolationForest refit is
