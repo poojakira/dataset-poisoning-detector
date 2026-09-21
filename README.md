@@ -2,13 +2,13 @@
 
 **Repository owner & maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira)) — I lead the design, implementation, validation, documentation, and maintenance of this repository, and I verify public claims against repository evidence.
 
-Statistical screening for training data pipelines. The online z-score/IQR
-scoring path runs at ~12,400 samples/sec (20-dim features, IsolationForest
-refit excluded — see below); the periodic multivariate IsolationForest refit is
-the throughput bottleneck. Flags suspicious samples before they enter your
-training set. **This is a screening layer, not a defense** — on feature-space
-statistics alone it sits near ~0.54 AUC for subtle/image attacks. For label-flip
-attacks, use the label-aware `spectral` method.
+Statistical screening for training data pipelines. The repository includes a
+reproducible benchmark harness for the shipped implementation and records its
+environment and configuration with each run. Treat throughput as an
+environment-scoped measurement, not a hardware-independent product claim.
+**This is a screening layer, not a defense** — feature-space statistics remain
+weak against subtle/image attacks. For label-flip attacks, use the label-aware
+`spectral` method and evaluate it on data representative of your pipeline.
 
 ---
 
