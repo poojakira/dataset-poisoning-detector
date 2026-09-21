@@ -365,6 +365,8 @@ The engineering value of this project is primarily in the streaming infrastructu
 | Monitoring and alerting | Yes | Prometheus metrics, Grafana dashboards, multi-channel alerts |
 | Streaming support | Yes | Kafka consumer, 12,400 samples/sec throughput |
 | Quarantine storage | Yes | Redis (streaming) + SQLite (batch) |
+
+> **Storage boundary:** `PostgresStore` is a deliberate stub and raises `NotImplementedError`; PostgreSQL quarantine persistence is **not implemented or supported** in the current repository. Supported paths are Redis for streaming quarantine and SQLite for batch/local storage.
 | Test coverage | Yes | 12 test modules, 122 tests collected and passing (1 skipped), covering all components incl. input-validation hardening |
 | CI/CD | Yes | GitHub Actions (`.github/` directory) |
 | Runbook | Yes | `RUNBOOK.md` with operational procedures |
