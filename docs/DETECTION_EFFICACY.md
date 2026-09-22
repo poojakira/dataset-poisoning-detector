@@ -82,9 +82,8 @@ Source: `benchmarks/BENCHMARK_METADATA.md` + `benchmarks/throughput_tracker.py`.
   in `BENCHMARK_METADATA.md`.
 - **Caveat:** with the default periodic Isolation Forest refit enabled, sustained
   throughput is far lower because the refit dominates. `throughput_tracker.py`
-  falls back to a lightweight stub detector if the optional streaming extras are
-  not installed — see the script header. Throughput is a performance figure, **not**
-  a detection-quality figure.
+  imports the shipped `StreamingDetector` directly and does **not** fall back to
+  a test stub. Throughput is a performance figure, **not** a detection-quality figure.
 
 ---
 
