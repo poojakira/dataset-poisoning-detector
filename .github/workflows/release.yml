@@ -23,14 +23,22 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install dependencies
+      - name: Install dependencies and release security tools
         run: |
+          python -m pip install --upgrade pip
           pip install -e ".[dev,realtime,kafka]"
+          pip install bandit==1.8.3 pip-audit==2.10.1
 
       - name: Run tests with coverage
         run: |
           PYTHONPATH=src pytest tests/ --cov=poison_detector --cov-report=xml --cov-fail-under=90
-          
+
+      - name: Run release security gates
+        run: |
+          ruff check src/poison_detector tests
+          bandit -r src/poison_detector -ll
+          pip-audit --skip-editable --progress-spinner=off
+
       - name: Run benchmarks (CI gate)
         run: |
           python benchmarks/throughput_tracker.py --ci --output benchmark-results.json
@@ -223,6 +231,8 @@ jobs:
     permissions:
       packages: write
       contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 
@@ -246,7 +256,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        id: image
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -255,3 +266,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+
+      - name: Attest container provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
