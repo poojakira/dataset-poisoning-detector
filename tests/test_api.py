@@ -9,6 +9,7 @@ Skipped automatically when the optional FastAPI stack is not installed
 
 import os
 import importlib
+import time
 
 import numpy as np
 import pytest
@@ -284,3 +285,30 @@ def test_websocket_stream_receives_events(monkeypatch):
         response = ws.receive_json()
         assert response["event"] == "ack"
         assert response["data"] == "ping"
+
+def test_only_one_readiness_route_is_registered(monkeypatch, tmp_path):
+    api_module = _ready_api(monkeypatch, tmp_path)
+    ready_routes = [
+        route for route in api_module.app.routes
+        if getattr(route, "path", None) == "/ready"
+    ]
+    assert len(ready_routes) == 1
+
+
+def test_scoring_timeout_fails_closed(monkeypatch, tmp_path):
+    api_module = _ready_api(monkeypatch, tmp_path)
+    monkeypatch.setattr(api_module, "_SCORE_TIMEOUT_SECONDS", 0.01)
+
+    def slow_score(features):
+        time.sleep(0.05)
+        return api_module.ScoringResult(
+            score=0.0,
+            is_poisoned=False,
+            method_votes={},
+            latency_ms=50.0,
+        )
+
+    monkeypatch.setattr(api_module, "_score_one_sync", slow_score)
+    client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
+    response = client.post("/score", json={"features": [0.1, 0.2, 0.3]})
+    assert response.status_code == 504
