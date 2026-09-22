@@ -48,9 +48,12 @@ import hmac
 import os
 import time
 import traceback
+from pathlib import Path
 from collections import defaultdict
 from dataclasses import asdict
 from typing import Any
+
+import numpy as np
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -113,9 +116,23 @@ class BatchRequest(BaseModel):
     @classmethod
     def validate_samples(cls, v: list[list[float]]) -> list[list[float]]:
         """Ensure all samples have at least one feature."""
+        total_values = 0
+        expected_dim: int | None = None
         for i, sample in enumerate(v):
             if len(sample) < 1:
                 raise ValueError(f"Sample at index {i} must have at least 1 feature")
+            if len(sample) > 100000:
+                raise ValueError(f"Sample at index {i} exceeds 100000 features")
+            if expected_dim is None:
+                expected_dim = len(sample)
+            elif len(sample) != expected_dim:
+                raise ValueError(
+                    f"All samples must have the same feature dimension; "
+                    f"sample 0 has {expected_dim}, sample {i} has {len(sample)}"
+                )
+            total_values += len(sample)
+            if total_values > 200000:
+                raise ValueError("Batch exceeds 200000 total feature values")
         return v
 
 
@@ -138,6 +155,7 @@ class HealthResponse(BaseModel):
     baseline_size: int = Field(description="Number of samples in the baseline model")
     queue_depth: int = Field(description="Current processing queue depth")
     uptime_seconds: float = Field(description="Seconds since service start")
+    baseline_ready: bool = Field(description="Whether a known-clean startup baseline is loaded")
 
 
 class StatsResponse(BaseModel):
@@ -251,6 +269,58 @@ _detector = StreamingDetector(
 _rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
 _ws_manager = ConnectionManager()
 
+_MAX_REQUEST_BYTES = int(os.environ.get("POISON_MAX_REQUEST_BYTES", str(2 * 1024 * 1024)))
+_MIN_BASELINE_SAMPLES = int(os.environ.get("POISON_MIN_BASELINE_SAMPLES", "50"))
+_BASELINE_PATH = os.environ.get("POISON_BASELINE_PATH", "")
+_BASELINE_LOAD_ERROR: str | None = None
+
+
+def _load_startup_baseline() -> None:
+    """Load a known-clean baseline from an immutable NPZ artifact.
+
+    The file must contain a numeric 2D array named 'features'. Pickled object
+    arrays are rejected. A missing/invalid baseline leaves the process live
+    but not ready; scoring endpoints fail closed with HTTP 503.
+    """
+    global _BASELINE_LOAD_ERROR
+    if not _BASELINE_PATH:
+        _BASELINE_LOAD_ERROR = "POISON_BASELINE_PATH is not configured"
+        return
+
+    path = Path(_BASELINE_PATH)
+    try:
+        if not path.is_file():
+            raise ValueError(f"baseline file does not exist: {path}")
+        with np.load(path, allow_pickle=False) as data:
+            if "features" not in data:
+                raise ValueError("baseline NPZ must contain a 'features' array")
+            features = np.asarray(data["features"], dtype=np.float64)
+        if features.ndim != 2:
+            raise ValueError("baseline features must be a 2D numeric array")
+        if features.shape[0] < _MIN_BASELINE_SAMPLES:
+            raise ValueError(
+                f"baseline requires at least {_MIN_BASELINE_SAMPLES} samples; "
+                f"got {features.shape[0]}"
+            )
+        if features.shape[1] < 1 or features.shape[1] > 100000:
+            raise ValueError("baseline feature dimension must be between 1 and 100000")
+        if not np.isfinite(features).all():
+            raise ValueError("baseline contains NaN or infinity")
+        _detector.update_baseline(features)
+        _BASELINE_LOAD_ERROR = None
+    except (OSError, ValueError) as exc:
+        _BASELINE_LOAD_ERROR = str(exc)
+
+
+def _baseline_ready() -> bool:
+    return (
+        _BASELINE_LOAD_ERROR is None
+        and _detector.get_stats().baseline_size >= _MIN_BASELINE_SAMPLES
+    )
+
+
+_load_startup_baseline()
+
 app = FastAPI(
     title="Poison Detector API",
     description="Real-time dataset poisoning detection service",
@@ -261,7 +331,7 @@ app = FastAPI(
 # --- Middleware ---
 
 # Endpoints that bypass authentication (monitoring/health checks only).
-_UNAUTHENTICATED_PATHS = frozenset({"/health"})
+_UNAUTHENTICATED_PATHS = frozenset({"/health", "/ready"})
 
 # Resolve expected API key at module load time. If API_KEY is not set the
 # service starts in fail-closed mode: all authenticated endpoints return 401.
@@ -291,6 +361,20 @@ async def api_key_auth_middleware(request: Request, call_next: Any) -> Any:
         - WebSocket /stream endpoint requires the X-API-Key header in the
           initial HTTP upgrade request.
     """
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > _MAX_REQUEST_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body exceeds configured size limit."},
+                )
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Invalid Content-Length header."},
+            )
+
     if request.url.path in _UNAUTHENTICATED_PATHS:
         return await call_next(request)
 
@@ -344,6 +428,12 @@ async def score_sample(request: SampleRequest) -> ScoringResponse:
     Returns anomaly score, poison flag, per-method votes, and latency.
     Target latency: <10ms for statistical-only, <50ms with isolation forest.
     """
+    if not _baseline_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="Detector baseline is not ready; load a known-clean startup baseline.",
+        )
+
     try:
         result: ScoringResult = _detector.score_sample(request.features)
     except Exception as e:
@@ -381,6 +471,12 @@ async def score_batch(request: BatchRequest) -> BatchResponse:
     Processes samples sequentially and returns aggregated results.
     For true async processing, submit to the pipeline queue instead.
     """
+    if not _baseline_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="Detector baseline is not ready; load a known-clean startup baseline.",
+        )
+
     start = time.perf_counter()
 
     results: list[ScoringResponse] = []
@@ -440,8 +536,8 @@ async def health_check() -> HealthResponse:
     stats = _detector.get_stats()
     uptime = time.time() - _start_time
 
-    # Determine status
-    status = "healthy"
+    # Liveness remains 200, but status is degraded until the trusted baseline is ready.
+    status = "healthy" if _baseline_ready() else "degraded"
     if stats.poison_rate > 0.2:
         status = "degraded"
     if stats.avg_latency_ms > 1000:
@@ -455,6 +551,25 @@ async def health_check() -> HealthResponse:
         baseline_size=stats.baseline_size,
         queue_depth=0,
         uptime_seconds=uptime,
+        baseline_ready=_baseline_ready(),
+    )
+
+
+@app.get("/ready")
+async def readiness_check() -> JSONResponse:
+    """Return 200 only when the known-clean baseline has been initialized."""
+    if not _baseline_ready():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "reason": _BASELINE_LOAD_ERROR or "baseline below minimum size",
+            },
+        )
+    stats = _detector.get_stats()
+    return JSONResponse(
+        status_code=200,
+        content={"status": "ready", "baseline_size": stats.baseline_size},
     )
 
 
