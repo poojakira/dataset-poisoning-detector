@@ -18,7 +18,7 @@ I built this because we kept getting bitten by slow data corruption. A vendor fe
 
 This tool sits at the ingestion boundary (MITRE ATLAS AML.T0020) and applies statistical tests to every incoming sample. It won't catch sophisticated targeted attacks, but it catches the dumb stuff fast: corrupted feature vectors, distribution shifts, gross outliers. It produces structured logs so you have an audit trail of what went into training and what got flagged.
 
-It integrates with Kafka for streaming, exports Prometheus metrics, and ships with Docker and Grafana configs. It is designed to integrate at the ingestion boundary, but production deployment still requires environment-specific authentication, storage, observability, and failure-handling decisions.
+It integrates with Kafka for streaming, exports Prometheus metrics, and ships with Docker and Grafana configs. It is designed to integrate at the ingestion boundary, but the HTTP service now fails closed until a known-clean baseline artifact is loaded and authenticated callers are configured. Multi-replica deployments still require external/shared rate limiting and a deliberate state-distribution strategy.
 
 ---
 
@@ -259,15 +259,29 @@ print(f"Spectral detected {report.poisoned_count} mislabeled samples")
 # Full stack: API + Redis + Kafka + Prometheus + Grafana
 docker compose up -d
 
-# API only
+# Prepare a known-clean startup baseline (NPZ, no pickle/object arrays).
+python - <<'PY'
+import numpy as np
+clean = np.random.default_rng(42).normal(size=(500, 5))
+np.savez("baseline.npz", features=clean)
+PY
+
+# API only. One worker runs per container because detector state is process-local.
 docker build -t poison-detector:latest .
-docker run -p 8000:8000 poison-detector:latest
+export API_KEY="$(openssl rand -hex 32)"
+docker run --rm -p 8000:8000 \
+  -e API_KEY="$API_KEY" \
+  -e POISON_BASELINE_PATH=/baseline/baseline.npz \
+  -v "$PWD/baseline.npz:/baseline/baseline.npz:ro" \
+  poison-detector:latest
 
-# Check health
+# Liveness and readiness are separate.
 curl http://localhost:8000/health
+curl http://localhost:8000/ready
 
-# Score a sample via REST
+# Score only after /ready returns 200.
 curl -X POST http://localhost:8000/score \
+  -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"features": [1.2, 0.5, -0.3, 2.1, 0.8]}'
 ```
