@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import math
 import os
 import time
 import traceback
@@ -77,6 +78,13 @@ class SampleRequest(BaseModel):
         max_length=100000,
         description="Feature vector for the sample to score",
     )
+
+    @field_validator("features")
+    @classmethod
+    def validate_features(cls, values: list[float]) -> list[float]:
+        if not all(math.isfinite(v) for v in values):
+            raise ValueError("features must contain only finite numeric values")
+        return values
     source: str = Field(
         default="api",
         max_length=256,
@@ -573,6 +581,23 @@ async def readiness_check() -> JSONResponse:
     )
 
 
+@app.get("/ready")
+async def readiness_check() -> dict[str, str]:
+    """Readiness is stricter than liveness.
+
+    This process is ready only when authentication is configured and the
+    detector can expose its current state. Queue consumers are separate
+    processes and must expose their own readiness.
+    """
+    if not _EXPECTED_API_KEY:
+        raise HTTPException(status_code=503, detail="API_KEY is not configured")
+    try:
+        _detector.get_stats()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="detector is not ready") from exc
+    return {"status": "ready"}
+
+
 @app.get("/stats", response_model=StatsResponse)
 async def get_stats() -> StatsResponse:
     """Get detector statistics.
@@ -618,14 +643,3 @@ async def websocket_stream(websocket: WebSocket) -> None:
     """
     if not _is_valid_api_key(websocket.headers.get("X-API-Key", "")):
         await websocket.close(code=1008, reason="Unauthorized")
-        return
-
-    await _ws_manager.connect(websocket)
-    try:
-        while True:
-            # Keep connection alive, listen for client messages (ping/pong)
-            data = await websocket.receive_text()
-            # Echo back as acknowledgment
-            await websocket.send_json({"event": "ack", "data": data})
-    except WebSocketDisconnect:
-        _ws_manager.disconnect(websocket)
