@@ -8,6 +8,9 @@ Skipped automatically when the optional FastAPI stack is not installed
 """
 
 import os
+import importlib
+
+import numpy as np
 import pytest
 
 pytest.importorskip("fastapi", reason="FastAPI optional dependency not installed")
@@ -30,6 +33,22 @@ def _client_with_key(api_key: str) -> TestClient:
     return client
 
 
+def _ready_api(monkeypatch, tmp_path):
+    """Reload the API with an explicit known-clean baseline artifact."""
+    baseline = np.asarray(
+        [[float(i) / 100.0, float(i + 1) / 100.0, float(i + 2) / 100.0] for i in range(60)],
+        dtype=np.float64,
+    )
+    baseline_path = tmp_path / "baseline.npz"
+    np.savez(baseline_path, features=baseline)
+    monkeypatch.setenv("API_KEY", "test-secret")
+    monkeypatch.setenv("POISON_BASELINE_PATH", str(baseline_path))
+    monkeypatch.setenv("POISON_MIN_BASELINE_SAMPLES", "50")
+    import poison_detector.api as api_module
+
+    return importlib.reload(api_module)
+
+
 # ---------------------------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------------------------
@@ -39,7 +58,6 @@ def test_score_returns_401_when_no_api_key(monkeypatch):
     """POST /score must return 401 when X-API-Key header is absent and API_KEY is set."""
     monkeypatch.setenv("API_KEY", "test-secret")
     # Reimport to pick up the env var (module-level _EXPECTED_API_KEY).
-    import importlib
     import poison_detector.api as api_module
 
     importlib.reload(api_module)
@@ -140,11 +158,34 @@ def test_health_endpoint_returns_200_with_status_fields():
     assert "baseline_size" in data
     assert "queue_depth" in data
     assert "uptime_seconds" in data
+    assert "baseline_ready" in data
+    assert isinstance(data["baseline_ready"], bool)
     assert isinstance(data["uptime_seconds"], (int, float))
     assert data["uptime_seconds"] >= 0
 
 
-def test_score_endpoint_returns_scoring_result(monkeypatch):
+def test_scoring_fails_closed_without_baseline(monkeypatch):
+    """Authenticated scoring must return 503 until a trusted baseline is loaded."""
+    monkeypatch.setenv("API_KEY", "test-secret")
+    monkeypatch.delenv("POISON_BASELINE_PATH", raising=False)
+    import poison_detector.api as api_module
+
+    api_module = importlib.reload(api_module)
+    client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
+    assert client.get("/ready").status_code == 503
+    response = client.post("/score", json={"features": [1.0, 2.0, 3.0]})
+    assert response.status_code == 503
+
+
+def test_ready_with_known_clean_baseline(monkeypatch, tmp_path):
+    api_module = _ready_api(monkeypatch, tmp_path)
+    client = TestClient(api_module.app)
+    response = client.get("/ready")
+    assert response.status_code == 200
+    assert response.json()["baseline_size"] >= 50
+
+
+def test_score_endpoint_returns_scoring_result(monkeypatch, tmp_path):
     """POST /score returns a valid scoring result with all fields.
 
     Submits a sample feature vector with a valid API key and verifies the
@@ -173,7 +214,7 @@ def test_score_endpoint_returns_scoring_result(monkeypatch):
     assert data["latency_ms"] >= 0.0
 
 
-def test_batch_endpoint_handles_multiple_samples(monkeypatch):
+def test_batch_endpoint_handles_multiple_samples(monkeypatch, tmp_path):
     """POST /batch scores multiple samples and returns aggregated results.
 
     Submits a batch of 3 samples with a valid API key and verifies the
@@ -212,6 +253,16 @@ def test_batch_endpoint_handles_multiple_samples(monkeypatch):
         assert "is_poisoned" in result
         assert "method_votes" in result
         assert "latency_ms" in result
+
+
+def test_batch_rejects_inconsistent_dimensions(monkeypatch, tmp_path):
+    api_module = _ready_api(monkeypatch, tmp_path)
+    client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
+    response = client.post(
+        "/batch",
+        json={"samples": [[0.1, 0.2, 0.3], [0.1, 0.2]]},
+    )
+    assert response.status_code == 422
 
 
 def test_websocket_stream_receives_events(monkeypatch):
