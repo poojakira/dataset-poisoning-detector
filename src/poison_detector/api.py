@@ -44,10 +44,12 @@ Security Notes:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import math
 import os
 import time
+import threading
 import traceback
 from pathlib import Path
 from collections import defaultdict
@@ -59,6 +61,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, field_validator
+from starlette.concurrency import run_in_threadpool
 
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
@@ -182,43 +185,57 @@ class StatsResponse(BaseModel):
 
 
 class RateLimiter:
-    """Simple in-memory sliding-window rate limiter.
-
-    Tracks request counts per API key within a time window.
-    Not suitable for multi-process deployments without external state.
-    """
+    """In-process limiter used only outside production."""
 
     def __init__(self, max_requests: int = 100, window_seconds: int = 60) -> None:
-        """Initialize rate limiter.
-
-        Args:
-            max_requests: Maximum requests per window per API key.
-            window_seconds: Window size in seconds.
-        """
         self._max_requests = max_requests
         self._window_seconds = window_seconds
         self._requests: dict[str, list[float]] = defaultdict(list)
 
-    def is_allowed(self, api_key: str) -> bool:
-        """Check if a request is allowed under the rate limit.
-
-        Args:
-            api_key: The API key making the request.
-
-        Returns:
-            True if allowed, False if rate limited.
-        """
+    def is_allowed(self, identity: str) -> bool:
         now = time.time()
         window_start = now - self._window_seconds
-
-        # Clean old entries
-        self._requests[api_key] = [t for t in self._requests[api_key] if t > window_start]
-
-        if len(self._requests[api_key]) >= self._max_requests:
+        self._requests[identity] = [t for t in self._requests[identity] if t > window_start]
+        if len(self._requests[identity]) >= self._max_requests:
             return False
-
-        self._requests[api_key].append(now)
+        self._requests[identity].append(now)
         return True
+
+    def ready(self) -> bool:
+        return True
+
+
+class RedisRateLimiter:
+    """Shared fixed-window limiter for multi-replica production deployments."""
+
+    def __init__(self, redis_url: str, max_requests: int = 100, window_seconds: int = 60) -> None:
+        import redis
+
+        self._max_requests = max_requests
+        self._window_seconds = window_seconds
+        self._redis = redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            health_check_interval=30,
+        )
+        self._redis.ping()
+
+    def is_allowed(self, identity: str) -> bool:
+        bucket = int(time.time() // self._window_seconds)
+        key = f"poison-detector:ratelimit:{identity}:{bucket}"
+        pipe = self._redis.pipeline(transaction=True)
+        pipe.incr(key)
+        pipe.expire(key, self._window_seconds + 5)
+        count, _ = pipe.execute()
+        return int(count) <= self._max_requests
+
+    def ready(self) -> bool:
+        try:
+            return bool(self._redis.ping())
+        except Exception:
+            return False
 
 
 # --- WebSocket Manager ---
@@ -274,12 +291,33 @@ _detector = StreamingDetector(
     zscore_threshold=_config.thresholds.zscore_threshold,
     vote_threshold=_config.thresholds.ensemble_vote_threshold,
 )
-_rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
 _ws_manager = ConnectionManager()
 
+_ENVIRONMENT = os.environ.get("POISON_ENVIRONMENT", "development").strip().lower()
+_RATE_LIMIT_RPM = int(os.environ.get("POISON_RATE_LIMIT_RPM", "100"))
+_RATE_LIMIT_REDIS_URL = os.environ.get("POISON_REDIS_URL", "").strip()
 _MAX_REQUEST_BYTES = int(os.environ.get("POISON_MAX_REQUEST_BYTES", str(2 * 1024 * 1024)))
 _MIN_BASELINE_SAMPLES = int(os.environ.get("POISON_MIN_BASELINE_SAMPLES", "50"))
 _BASELINE_PATH = os.environ.get("POISON_BASELINE_PATH", "")
+_SCORE_TIMEOUT_SECONDS = float(os.environ.get("POISON_SCORE_TIMEOUT_SECONDS", "30"))
+_MAX_INFLIGHT_SCORING = int(os.environ.get("POISON_MAX_INFLIGHT_SCORING", "16"))
+if _SCORE_TIMEOUT_SECONDS <= 0:
+    raise RuntimeError("POISON_SCORE_TIMEOUT_SECONDS must be positive")
+if _MAX_INFLIGHT_SCORING < 1 or _MAX_INFLIGHT_SCORING > 128:
+    raise RuntimeError("POISON_MAX_INFLIGHT_SCORING must be between 1 and 128")
+if _ENVIRONMENT == "production":
+    if not _RATE_LIMIT_REDIS_URL:
+        raise RuntimeError("POISON_REDIS_URL is required in production")
+    _rate_limiter = RedisRateLimiter(
+        _RATE_LIMIT_REDIS_URL,
+        max_requests=_RATE_LIMIT_RPM,
+        window_seconds=60,
+    )
+else:
+    _rate_limiter = RateLimiter(max_requests=_RATE_LIMIT_RPM, window_seconds=60)
+
+_detector_lock = threading.Lock()
+_scoring_slots = asyncio.Semaphore(_MAX_INFLIGHT_SCORING)
 _BASELINE_LOAD_ERROR: str | None = None
 
 
@@ -386,10 +424,10 @@ async def api_key_auth_middleware(request: Request, call_next: Any) -> Any:
     if request.url.path in _UNAUTHENTICATED_PATHS:
         return await call_next(request)
 
-    if not _EXPECTED_API_KEY:
+    if not _EXPECTED_API_KEY or (_ENVIRONMENT == "production" and len(_EXPECTED_API_KEY) < 32):
         return JSONResponse(
-            status_code=401,
-            content={"detail": "API key authentication is not configured. Set API_KEY env var."},
+            status_code=503 if _ENVIRONMENT == "production" else 401,
+            content={"detail": "API key authentication is not securely configured."},
         )
 
     provided_key = request.headers.get("X-API-Key", "")
@@ -418,7 +456,17 @@ async def rate_limit_middleware(request: Request, call_next: Any) -> Any:
         return await call_next(request)
 
     api_key = request.headers.get("X-API-Key", "anonymous")
-    if not _rate_limiter.is_allowed(api_key):
+    identity = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:24]
+    try:
+        allowed = _rate_limiter.is_allowed(identity)
+    except Exception:
+        if _ENVIRONMENT == "production":
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Rate-limit backend unavailable."},
+            )
+        allowed = False
+    if not allowed:
         return JSONResponse(
             status_code=429,
             content={"detail": "Rate limit exceeded. Try again later."},
@@ -427,6 +475,18 @@ async def rate_limit_middleware(request: Request, call_next: Any) -> Any:
 
 
 # --- Endpoints ---
+
+
+def _score_one_sync(features: list[float]) -> ScoringResult:
+    """Serialize access to the mutable streaming detector."""
+    with _detector_lock:
+        return _detector.score_sample(features)
+
+
+def _score_batch_sync(samples: list[list[float]]) -> list[ScoringResult]:
+    """Score a batch under one detector-state lock to preserve ordering."""
+    with _detector_lock:
+        return [_detector.score_sample(sample) for sample in samples]
 
 
 @app.post("/score", response_model=ScoringResponse)
@@ -443,7 +503,13 @@ async def score_sample(request: SampleRequest) -> ScoringResponse:
         )
 
     try:
-        result: ScoringResult = _detector.score_sample(request.features)
+        async with _scoring_slots:
+            result = await asyncio.wait_for(
+                run_in_threadpool(_score_one_sync, request.features),
+                timeout=_SCORE_TIMEOUT_SECONDS,
+            )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Scoring timed out") from exc
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -487,28 +553,30 @@ async def score_batch(request: BatchRequest) -> BatchResponse:
 
     start = time.perf_counter()
 
-    results: list[ScoringResponse] = []
-    poisoned_count = 0
-
     try:
-        for sample in request.samples:
-            result = _detector.score_sample(sample)
-            results.append(
-                ScoringResponse(
-                    score=result.score,
-                    is_poisoned=result.is_poisoned,
-                    method_votes=result.method_votes,
-                    latency_ms=result.latency_ms,
-                )
+        async with _scoring_slots:
+            raw_results = await asyncio.wait_for(
+                run_in_threadpool(_score_batch_sync, request.samples),
+                timeout=_SCORE_TIMEOUT_SECONDS,
             )
-            if result.is_poisoned:
-                poisoned_count += 1
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Batch scoring timed out") from exc
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Batch scoring error at sample {len(results)}: {type(e).__name__}",
+            detail=f"Batch scoring error: {type(e).__name__}",
         )
 
+    results = [
+        ScoringResponse(
+            score=result.score,
+            is_poisoned=result.is_poisoned,
+            method_votes=result.method_votes,
+            latency_ms=result.latency_ms,
+        )
+        for result in raw_results
+    ]
+    poisoned_count = sum(1 for result in raw_results if result.is_poisoned)
     elapsed_ms = (time.perf_counter() - start) * 1000.0
 
     # Broadcast batch summary to WebSocket clients
@@ -565,7 +633,17 @@ async def health_check() -> HealthResponse:
 
 @app.get("/ready")
 async def readiness_check() -> JSONResponse:
-    """Return 200 only when the known-clean baseline has been initialized."""
+    """Fail closed unless auth, baseline, detector and shared limiter are ready."""
+    if not _EXPECTED_API_KEY:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": "API_KEY is not configured"},
+        )
+    if _ENVIRONMENT == "production" and len(_EXPECTED_API_KEY) < 32:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": "API_KEY must be at least 32 characters"},
+        )
     if not _baseline_ready():
         return JSONResponse(
             status_code=503,
@@ -574,28 +652,27 @@ async def readiness_check() -> JSONResponse:
                 "reason": _BASELINE_LOAD_ERROR or "baseline below minimum size",
             },
         )
-    stats = _detector.get_stats()
+    if not _rate_limiter.ready():
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": "rate-limit backend unavailable"},
+        )
+    try:
+        stats = _detector.get_stats()
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": "detector state unavailable"},
+        )
     return JSONResponse(
         status_code=200,
-        content={"status": "ready", "baseline_size": stats.baseline_size},
+        content={
+            "status": "ready",
+            "baseline_size": stats.baseline_size,
+            "rate_limit_backend": "redis" if _ENVIRONMENT == "production" else "memory",
+            "score_timeout_seconds": _SCORE_TIMEOUT_SECONDS,
+        },
     )
-
-
-@app.get("/ready")
-async def readiness_check() -> dict[str, str]:
-    """Readiness is stricter than liveness.
-
-    This process is ready only when authentication is configured and the
-    detector can expose its current state. Queue consumers are separate
-    processes and must expose their own readiness.
-    """
-    if not _EXPECTED_API_KEY:
-        raise HTTPException(status_code=503, detail="API_KEY is not configured")
-    try:
-        _detector.get_stats()
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail="detector is not ready") from exc
-    return {"status": "ready"}
 
 
 @app.get("/stats", response_model=StatsResponse)
