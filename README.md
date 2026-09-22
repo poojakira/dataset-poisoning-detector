@@ -121,6 +121,11 @@ How data moves through the system from ingestion to alert:
 7. Flagged samples route to quarantine (Redis) and trigger alerts
 8. Prometheus metrics emit continuously; Grafana dashboards show real-time poison rate, latency, drift status
 
+**Startup baseline contract:**
+- The API does not score until `POISON_BASELINE_PATH` points to a valid NPZ containing a finite 2D `features` array.
+- `/health` is liveness; `/ready` reflects whether the trusted baseline loaded successfully.
+- `/score` and `/batch` return 503 until readiness is established, preventing first-request poisoning of the baseline.
+
 **API Mode (service integration):**
 1. FastAPI service (`api.py`) exposes REST and WebSocket endpoints
 2. Kafka consumer ingests samples from the training data pipeline topic
@@ -368,7 +373,7 @@ The engineering value of this project is primarily in the streaming infrastructu
 2. **Per-feature independence assumption.** Online Z-score and IQR check each feature independently. Correlated poisoning across features (that stays within per-feature bounds) is invisible to these methods.
 3. **IsolationForest periodic refit lag.** Between refits, the multivariate model may be stale. The `refit_interval` parameter trades freshness for throughput.
 4. **No temporal analysis.** The system scores each sample independently. Patterns that emerge only across sequences of samples (e.g., gradual drift below threshold) require the separate drift module.
-5. **Single-threaded scoring.** `score_sample()` is not thread-safe. Production deployments must serialize access or run multiple worker processes.
+5. **Stateful single-worker service.** `score_sample()` mutates the baseline/window and is not thread-safe. Run one Uvicorn worker per container. Horizontal scale requires deterministic stream partitioning (for example, by dataset/model key) or externalized detector state; do not place multiple independent workers behind a load balancer and assume they share a baseline.
 
 ---
 
@@ -387,18 +392,19 @@ The engineering value of this project is primarily in the streaming infrastructu
 | CI/CD | Yes | GitHub Actions (`.github/` directory) |
 | Runbook | Yes | `RUNBOOK.md` with operational procedures |
 | Changelog | Yes | `CHANGELOG.md` with version history |
-| Security hardening | Partial | Non-root container, memory limits, but no TLS/auth in demo stack |
-| Horizontal scaling | Not yet | Single-process design; would need sharding for multi-node |
+| Security hardening | Partial | Non-root container, fail-closed API-key auth, startup baseline readiness, request-size/feature-count limits; TLS/workload identity remain deployment responsibilities |
+| Horizontal scaling | Controlled | One stateful worker per replica; multi-replica scale requires explicit partitioning/external coordination so each dataset sees one authoritative baseline |
 | Data persistence | Partial | Redis with AOF; no long-term audit storage beyond quarantine |
 
-**What you would need to add for a real production deployment:**
+**Remaining production deployment requirements:**
 
-- TLS termination and API authentication
-- Secret management (not env vars with defaults)
-- Multi-node Kafka consumer group for horizontal scaling
-- Long-term audit log storage (S3, database)
-- Rate limiting on the API
-- Network segmentation between services
+- TLS termination and workload/service identity at the ingress/service mesh
+- Secret management backed by a managed secret store rather than long-lived environment values
+- Deterministic Kafka partition ownership or externalized detector state for multi-replica scaling
+- Long-term append-only audit/event storage
+- Distributed ingress rate limiting if more than one replica serves the same tenant/dataset
+- Network segmentation and explicit egress policy
+- Baseline artifact provenance/signature verification before startup
 
 ---
 
