@@ -34,8 +34,9 @@ Security Notes:
       value in os.environ['API_KEY']. The service starts in fail-closed mode
       if API_KEY is not set (all protected endpoints return 401).
     - No eval(), exec(), or dynamic code execution from request data.
-    - WebSocket connections are unauthenticated in this implementation.
-      Add token validation for production use.
+    - WebSocket /stream requires the same X-API-Key on the initial upgrade
+      request. After authentication, events are broadcast to all connected
+      clients; there is no per-client authorization or event filtering.
     - Response bodies never echo raw sample data back to prevent data leakage
       between tenants.
 """
