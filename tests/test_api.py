@@ -72,6 +72,19 @@ def test_health_does_not_require_api_key(monkeypatch):
     assert response.status_code == 200
 
 
+@pytest.mark.parametrize("path", ["/stats", "/metrics"])
+def test_operational_endpoints_require_api_key(monkeypatch, path):
+    """Operational telemetry must not be exposed anonymously."""
+    monkeypatch.setenv("API_KEY", "test-secret")
+    import importlib
+    import poison_detector.api as api_module
+
+    importlib.reload(api_module)
+    client = TestClient(api_module.app)
+    response = client.get(path)
+    assert response.status_code == 401
+
+
 def test_websocket_stream_returns_1008_when_no_api_key(monkeypatch):
     """WebSocket /stream must reject upgrades without X-API-Key."""
     monkeypatch.setenv("API_KEY", "test-secret")
