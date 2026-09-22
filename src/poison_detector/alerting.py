@@ -248,8 +248,8 @@ class PagerDutyChannel:
 class CloudWatchChannel:
     """Sends alerts as CloudWatch custom metrics/events.
 
-    Stub implementation that formats alerts for AWS CloudWatch.
-    Requires boto3 in production; logs locally when boto3 is unavailable.
+    Optional CloudWatch delivery implementation.
+    Requires boto3 for actual delivery; when boto3 is unavailable the channel logs the undelivered alert and returns False.
     """
 
     def __init__(self, namespace: str = "PoisonDetector", region: str = "us-east-1") -> None:
@@ -291,10 +291,10 @@ class CloudWatchChannel:
             )
             return True
         except ImportError:
-            logger.info(
-                f"CloudWatch alert (boto3 not available): [{alert.severity.value}] {alert.title}"
+            logger.warning(
+                f"CloudWatch delivery skipped because boto3 is unavailable: [{alert.severity.value}] {alert.title}"
             )
-            return True
+            return False
         except Exception as e:
             logger.warning(f"CloudWatch delivery failed: {e}")
             return False
