@@ -4,7 +4,7 @@
 
 Input validation, API/streaming behavior, quarantine/storage paths, benchmark integrity, and detector failure modes are in scope. This project is a screening layer, not a complete poisoning defense.
 
-This is an open-source research/engineering project. Security claims are limited to behavior demonstrated by the repository and its CI/committed evidence; they are not a statement of production certification.
+This is an open-source production-oriented security system. Security claims remain limited to behavior demonstrated by the repository, its CI, and committed evidence; production orientation does not imply third-party certification or a deployment history that is not evidenced here.
 
 ## Reporting a vulnerability
 
