@@ -261,7 +261,7 @@ app = FastAPI(
 # --- Middleware ---
 
 # Endpoints that bypass authentication (monitoring/health checks only).
-_UNAUTHENTICATED_PATHS = frozenset({"/health", "/stats", "/metrics"})
+_UNAUTHENTICATED_PATHS = frozenset({"/health"})
 
 # Resolve expected API key at module load time. If API_KEY is not set the
 # service starts in fail-closed mode: all authenticated endpoints return 401.
@@ -286,8 +286,8 @@ async def api_key_auth_middleware(request: Request, call_next: Any) -> Any:
           implicit open access when the secret is missing).
         - Returns HTTP 401 if the X-API-Key header is absent or does not
           match the expected value (constant-time comparison via hmac.compare_digest).
-        - Skips auth for /health, /stats, and /metrics so infrastructure
-          monitoring does not require credentials.
+        - Skips auth only for /health so load balancer liveness probes remain
+          available. Operational /stats and /metrics data require authentication.
         - WebSocket /stream endpoint requires the X-API-Key header in the
           initial HTTP upgrade request.
     """
