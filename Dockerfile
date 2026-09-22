@@ -1,57 +1,39 @@
-# Multi-stage production build for Dataset Poisoning Detector API
-#
-# Build: docker build -t poison-detector:latest .
-# Run:   docker run -p 8000:8000 poison-detector:latest
-#
-# Security: runs as non-root user, no dev dependencies in final image,
-# minimal attack surface with slim base.
-
-# ─── Stage 1: Build ────────────────────────────────────────────────────────────
+# Multi-stage runtime image for the authenticated dataset-poisoning API.
 FROM python:3.12-slim AS builder
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /build
+COPY pyproject.toml ./
+COPY src ./src
+RUN python -m pip install --no-cache-dir --upgrade pip wheel \
+    && python -m pip wheel --no-cache-dir --wheel-dir /wheels ".[realtime]"
 
-# Install build dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+FROM python:3.12-slim AS runtime
 
-# Copy only dependency specification first (layer caching)
-COPY pyproject.toml .
-COPY src/ src/
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Build wheel
-RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -e ".[realtime]"
+RUN groupadd --system detector \
+    && useradd --system --gid detector --create-home --home-dir /home/detector detector
 
-# ─── Stage 2: Production ──────────────────────────────────────────────────────
-FROM python:3.12-slim AS production
-
-# Security: create non-root user
-RUN groupadd -r detector && useradd -r -g detector -d /app -s /sbin/nologin detector
+COPY --from=builder /wheels /wheels
+RUN python -m pip install --no-cache-dir --no-index --find-links /wheels \
+      "dataset-poisoning-detector[realtime]" \
+    && rm -rf /wheels
 
 WORKDIR /app
+COPY config ./config
 
-# Install runtime dependencies from wheels (no compilation needed)
-COPY --from=builder /build/wheels /tmp/wheels
-COPY --from=builder /build/pyproject.toml .
-COPY --from=builder /build/src/ src/
-
-RUN pip install --no-cache-dir --find-links /tmp/wheels -e ".[realtime]" \
-    && rm -rf /tmp/wheels
-
-# Copy configuration
-COPY config/ config/
-
-# Switch to non-root user
 USER detector
-
-# Expose API port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()" || exit 1
 
-# Detector baselines and the built-in limiter are process-local. Run one worker
-# per container until those states are externalized; horizontal scale belongs
-# behind a shared queue/rate-limit layer so replicas do not diverge silently.
+# Detector and rate-limit state are process-local. Run one worker per container.
+# Horizontal replicas require an external/shared rate limiter and deliberate
+# detector-state distribution strategy.
 ENTRYPOINT ["python", "-m", "uvicorn"]
-CMD ["poison_detector.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--access-log"]
+CMD ["poison_detector.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log"]
