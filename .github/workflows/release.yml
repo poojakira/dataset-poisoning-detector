@@ -268,7 +268,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
       - name: Attest container provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ghcr.io/${{ github.repository }}
           subject-digest: ${{ steps.image.outputs.digest }}
