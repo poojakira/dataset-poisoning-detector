@@ -13,9 +13,9 @@ def test_attribution_returns_sorted_by_deviation():
     assert 99 in attr
     deviations = attr[99]
     magnitudes = [mag for _, mag in deviations]
-    assert magnitudes == sorted(magnitudes, reverse=True), (
-        "Deviations should be sorted descending by magnitude"
-    )
+    assert magnitudes == sorted(
+        magnitudes, reverse=True
+    ), "Deviations should be sorted descending by magnitude"
     assert deviations[0][0] == 0, "Feature 0 should have largest deviation"
 
 
