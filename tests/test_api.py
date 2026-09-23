@@ -192,13 +192,9 @@ def test_score_endpoint_returns_scoring_result(monkeypatch, tmp_path):
     Submits a sample feature vector with a valid API key and verifies the
     response includes score, is_poisoned, method_votes, and latency_ms.
     """
-    monkeypatch.setenv("API_KEY", "test-secret")
-    import importlib
-    import poison_detector.api as api_module
-
-    importlib.reload(api_module)
+    api_module = _ready_api(monkeypatch, tmp_path)
     client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
-    payload = {"features": [1.0, 2.0, 3.0, 4.0, 5.0]}
+    payload = {"features": [1.0, 2.0, 3.0]}
     response = client.post("/score", json=payload)
 
     assert response.status_code == 200
@@ -221,17 +217,13 @@ def test_batch_endpoint_handles_multiple_samples(monkeypatch, tmp_path):
     Submits a batch of 3 samples with a valid API key and verifies the
     response structure including per-sample results and batch-level statistics.
     """
-    monkeypatch.setenv("API_KEY", "test-secret")
-    import importlib
-    import poison_detector.api as api_module
-
-    importlib.reload(api_module)
+    api_module = _ready_api(monkeypatch, tmp_path)
     client = TestClient(api_module.app, headers={"X-API-Key": "test-secret"})
     payload = {
         "samples": [
-            [1.0, 2.0, 3.0, 4.0, 5.0],
-            [1.1, 2.1, 3.1, 4.1, 5.1],
-            [1.2, 2.2, 3.2, 4.2, 5.2],
+            [1.0, 2.0, 3.0],
+            [1.1, 2.1, 3.1],
+            [1.2, 2.2, 3.2],
         ]
     }
     response = client.post("/batch", json=payload)
