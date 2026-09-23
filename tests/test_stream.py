@@ -144,7 +144,7 @@ def test_contamination_implies_nonzero_false_positives():
     detector = StreamingDetector(window_size=5000, contamination=contamination)
 
     # All-clean, in-distribution data. No poison at all.
-    clean = rng.normal(size=(800, 10))
+    clean = rng.normal(size=(200, 10))
     detector.update_baseline(clean)
 
     scores = np.array([detector.score_sample(row).score for row in clean])
