@@ -732,14 +732,3 @@ async def websocket_stream(websocket: WebSocket) -> None:
         pass
     finally:
         _ws_manager.disconnect(websocket)
-        return
-
-    await _ws_manager.connect(websocket)
-    try:
-        while True:
-            message = await websocket.receive_text()
-            await websocket.send_json({"event": "ack", "data": message})
-    except WebSocketDisconnect:
-        pass
-    finally:
-        _ws_manager.disconnect(websocket)
