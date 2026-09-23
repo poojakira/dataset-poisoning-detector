@@ -275,10 +275,11 @@ class StreamingDetector:
         # --- IsolationForest based detection ---
         iso_anomaly = False
         if self._model is not None:
-            raw_score = self._model.score_samples(sample_arr.reshape(1, -1))[0]
-            # sklearn: lower score = more anomalous, threshold at 0
-            # Normalize: decision_function gives offset from threshold
-            decision = self._model.decision_function(sample_arr.reshape(1, -1))[0]
+            # IsolationForest.decision_function(X) is score_samples(X) - offset_.
+            # Compute score_samples once so high-volume streaming does not traverse
+            # every tree twice for the same sample.
+            raw_score = float(self._model.score_samples(sample_arr.reshape(1, -1))[0])
+            decision = raw_score - float(self._model.offset_)
             iso_anomaly = decision < 0
             # Convert to 0-1 scale (approximate)
             iso_score = max(0.0, min(1.0, 0.5 - decision))
