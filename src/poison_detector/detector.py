@@ -92,8 +92,7 @@ def _validate_matrix(X: list[list[float]]) -> None:
         for j, val in enumerate(row):
             if isinstance(val, bool) or not isinstance(val, (int, float)):
                 raise TypeError(
-                    f"non-numeric value at sample {i}, feature {j}: "
-                    f"{val!r} ({type(val).__name__})"
+                    f"non-numeric value at sample {i}, feature {j}: {val!r} ({type(val).__name__})"
                 )
             if not math.isfinite(val):
                 raise ValueError(

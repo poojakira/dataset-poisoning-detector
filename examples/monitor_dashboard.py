@@ -47,9 +47,9 @@ def format_duration(seconds: float) -> str:
     if seconds < 60:
         return f"{seconds:.0f}s"
     elif seconds < 3600:
-        return f"{seconds/60:.1f}m"
+        return f"{seconds / 60:.1f}m"
     else:
-        return f"{seconds/3600:.1f}h"
+        return f"{seconds / 3600:.1f}h"
 
 
 class MetricsDashboard:
@@ -110,9 +110,7 @@ class MetricsDashboard:
         rate_processed = (processed - self._prev_processed) / max(dt, 0.001)
         rate_poisoned = (poisoned - self._prev_poisoned) / max(dt, 0.001)
         poison_pct = (poisoned / max(processed, 1)) * 100
-        avg_latency_ms = (
-            (latency_stats["sum"] / max(latency_stats["count"], 1)) * 1000
-        )
+        avg_latency_ms = (latency_stats["sum"] / max(latency_stats["count"], 1)) * 1000
 
         self._prev_processed = processed
         self._prev_poisoned = poisoned

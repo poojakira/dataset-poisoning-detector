@@ -47,9 +47,7 @@ logger = logging.getLogger("kafka_consumer")
 try:
     from confluent_kafka import Consumer, Producer, KafkaError, KafkaException
 except ImportError:
-    logger.error(
-        "confluent-kafka not installed. Install with: pip install -e '.[kafka]'"
-    )
+    logger.error("confluent-kafka not installed. Install with: pip install -e '.[kafka]'")
     sys.exit(1)
 
 from poison_detector.stream import StreamingDetector
@@ -108,20 +106,24 @@ class PoisonDetectionConsumer:
         self.fingerprinter = SampleFingerprinter(similarity_threshold=0.95)
 
         # Kafka clients
-        self.consumer = Consumer({
-            "bootstrap.servers": self.config.bootstrap_servers,
-            "group.id": self.config.group_id,
-            "auto.offset.reset": self.config.auto_offset_reset,
-            "enable.auto.commit": False,
-            "max.poll.interval.ms": self.config.max_poll_interval_ms,
-            "session.timeout.ms": self.config.session_timeout_ms,
-        })
-        self.producer = Producer({
-            "bootstrap.servers": self.config.bootstrap_servers,
-            "acks": "all",
-            "retries": 3,
-            "retry.backoff.ms": 1000,
-        })
+        self.consumer = Consumer(
+            {
+                "bootstrap.servers": self.config.bootstrap_servers,
+                "group.id": self.config.group_id,
+                "auto.offset.reset": self.config.auto_offset_reset,
+                "enable.auto.commit": False,
+                "max.poll.interval.ms": self.config.max_poll_interval_ms,
+                "session.timeout.ms": self.config.session_timeout_ms,
+            }
+        )
+        self.producer = Producer(
+            {
+                "bootstrap.servers": self.config.bootstrap_servers,
+                "acks": "all",
+                "retries": 3,
+                "retry.backoff.ms": 1000,
+            }
+        )
 
         # Register signal handlers
         signal.signal(signal.SIGINT, self._shutdown)
@@ -214,8 +216,7 @@ class PoisonDetectionConsumer:
         commit_interval = 100
 
         logger.info(
-            f"Starting consumer | topic={self.config.input_topic} | "
-            f"group={self.config.group_id}"
+            f"Starting consumer | topic={self.config.input_topic} | group={self.config.group_id}"
         )
 
         try:

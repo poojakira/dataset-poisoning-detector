@@ -65,7 +65,7 @@ def run_demo(
     print("=" * 70)
     print("  REAL-TIME DATASET POISONING DETECTION DEMO")
     print("=" * 70)
-    print(f"\n  Simulating {n_samples} samples | {poison_rate*100:.0f}% poison rate")
+    print(f"\n  Simulating {n_samples} samples | {poison_rate * 100:.0f}% poison rate")
     print(f"  Features: {n_features} | Detection: ensemble + drift + fingerprint")
     print("-" * 70)
 
@@ -137,14 +137,14 @@ def run_demo(
             dup_status = " [DUP]" if is_dup else ""
             actual = "POISON" if is_actually_poisoned else "CLEAN"
             print(
-                f"  [{i+1:04d}] FLAGGED | score={result.score:.3f} | "
+                f"  [{i + 1:04d}] FLAGGED | score={result.score:.3f} | "
                 f"actual={actual} | attack={attack or 'n/a'}"
                 f"{drift_status}{dup_status}"
             )
 
         # Progress indicator every 100 samples
         if (i + 1) % 100 == 0 and not flagged:
-            print(f"  [{i+1:04d}] ... processed {i+1}/{n_samples} samples")
+            print(f"  [{i + 1:04d}] ... processed {i + 1}/{n_samples} samples")
 
     # Final report
     print("\n" + "=" * 70)

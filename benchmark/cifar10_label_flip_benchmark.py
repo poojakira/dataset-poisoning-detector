@@ -198,7 +198,7 @@ def main():
     for rate in contamination_rates:
         n_poisoned = int(rate * len(y_clean))
         print(
-            f"[{contamination_rates.index(rate) + 2}/4] Contamination rate: {rate*100:.0f}% ({n_poisoned} samples flipped)"
+            f"[{contamination_rates.index(rate) + 2}/4] Contamination rate: {rate * 100:.0f}% ({n_poisoned} samples flipped)"
         )
         print("-" * 50)
 

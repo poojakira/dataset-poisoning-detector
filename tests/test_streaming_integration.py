@@ -199,9 +199,9 @@ class TestStreamingIntegration:
         assert stats["processed"] == 1050
         assert stats["flagged"] > 0, "Expected at least 1 flagged sample out of 50 poisoned, got 0"
         # Should flag a meaningful fraction of the 50 poisoned samples
-        assert (
-            stats["flagged"] >= 10
-        ), f"Expected at least 10 flagged (of 50 poisoned), got {stats['flagged']}"
+        assert stats["flagged"] >= 10, (
+            f"Expected at least 10 flagged (of 50 poisoned), got {stats['flagged']}"
+        )
 
     def test_no_false_negatives_on_obvious_poison(self, detector):
         """Strongly poisoned samples should always be flagged."""
@@ -251,9 +251,9 @@ class TestStreamingIntegration:
             detector.ingest(sample)
 
         drift_result = detector.check_drift()
-        assert (
-            drift_result["drift_detected"] is True
-        ), f"Drift should be detected after mean shift. Score: {drift_result.get('drift_score')}"
+        assert drift_result["drift_detected"] is True, (
+            f"Drift should be detected after mean shift. Score: {drift_result.get('drift_score')}"
+        )
         assert detector.drift_triggered is True
 
     def test_drift_stable_on_clean_data(self, detector):

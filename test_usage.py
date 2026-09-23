@@ -13,7 +13,7 @@ print(f"Usage test poisoned count: {report.poisoned_count}")
 # 2. Try to BREAK it
 print("Running break script...")
 try:
-    X_nan = clean_data + [[np.nan]*5]
+    X_nan = clean_data + [[np.nan] * 5]
     detect(X_nan)
     print("Failed to break on NaN (or it handled it)")
 except Exception as e:

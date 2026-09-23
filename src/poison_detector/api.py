@@ -88,6 +88,7 @@ class SampleRequest(BaseModel):
         if not all(math.isfinite(v) for v in values):
             raise ValueError("features must contain only finite numeric values")
         return values
+
     source: str = Field(
         default="api",
         max_length=256,

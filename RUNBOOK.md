@@ -45,9 +45,9 @@ import random
 
 random.seed(0)
 X = [[random.gauss(0, 1) for _ in range(10)] for _ in range(1000)]
-X[999] = [9.9] * 10                      # inject one obvious outlier
+X[999] = [9.9] * 10  # inject one obvious outlier
 
-report = detect(X, method="ensemble")    # "zscore" | "iqr" | "isolation" | "ensemble"
+report = detect(X, method="ensemble")  # "zscore" | "iqr" | "isolation" | "ensemble"
 print(f"Flagged {report.poisoned_count}/{report.total_samples}")
 for result in report.per_sample[:3]:
     print(result)
@@ -67,7 +67,7 @@ from poison_detector import detect
 rng = np.random.default_rng(0)
 X = np.vstack([rng.normal(0, 1, (200, 8)), rng.normal(6, 1, (200, 8))])
 labels = [0] * 200 + [1] * 200
-for i in range(200, 220):     # flip 20 class-1 samples to label 0
+for i in range(200, 220):  # flip 20 class-1 samples to label 0
     labels[i] = 0
 
 report = detect([row.tolist() for row in X], method="spectral", labels=labels)

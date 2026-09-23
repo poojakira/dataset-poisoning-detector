@@ -286,11 +286,11 @@ def test_websocket_stream_receives_events(monkeypatch):
         assert response["event"] == "ack"
         assert response["data"] == "ping"
 
+
 def test_only_one_readiness_route_is_registered(monkeypatch, tmp_path):
     api_module = _ready_api(monkeypatch, tmp_path)
     ready_routes = [
-        route for route in api_module.app.routes
-        if getattr(route, "path", None) == "/ready"
+        route for route in api_module.app.routes if getattr(route, "path", None) == "/ready"
     ]
     assert len(ready_routes) == 1
 

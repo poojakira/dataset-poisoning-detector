@@ -73,9 +73,7 @@ def generate_benchmark_dataset(
 
     features = np.vstack([clean, poisoned])
     labels = np.concatenate([clean_labels, poison_labels])
-    truth = np.concatenate(
-        [np.zeros(n_clean, dtype=int), np.ones(n_poisoned, dtype=int)]
-    )
+    truth = np.concatenate([np.zeros(n_clean, dtype=int), np.ones(n_poisoned, dtype=int)])
     order = rng.permutation(len(features))
     return features[order], labels[order], truth[order]
 

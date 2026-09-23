@@ -217,8 +217,10 @@ print(f"Flagged {report.poisoned_count}/{report.total_samples} samples")
 # Inspect flagged samples
 for result in report.per_sample:
     if result.is_poisoned:
-        print(f"  Sample {result.sample_idx}: score={result.anomaly_score:.3f}, "
-              f"features={result.features_flagged}")
+        print(
+            f"  Sample {result.sample_idx}: score={result.anomaly_score:.3f}, "
+            f"features={result.features_flagged}"
+        )
 ```
 
 ### Streaming Usage
@@ -239,9 +241,11 @@ for sample in data_stream:
     result = detector.score_sample(sample)
     if result.is_poisoned:
         quarantine(sample)
-        print(f"Poisoned! score={result.score:.3f}, "
-              f"votes={result.method_votes}, "
-              f"latency={result.latency_ms:.2f}ms")
+        print(
+            f"Poisoned! score={result.score:.3f}, "
+            f"votes={result.method_votes}, "
+            f"latency={result.latency_ms:.2f}ms"
+        )
 
 # Check detector health
 stats = detector.get_stats()

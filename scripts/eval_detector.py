@@ -19,6 +19,7 @@ Usage:
     python scripts/eval_detector.py --cifar-dir /path/to/cifar-10-batches-py
     python scripts/eval_detector.py --cifar-dir /data/cifar10 --output-dir ./results
 """
+
 from __future__ import annotations
 
 import argparse
@@ -103,8 +104,11 @@ def threshold_for_target_fpr(y_true, scores, target_fpr):
 
 def evaluate_flip_rate(feats, y, flip_rate):
     groups = build_labelflip_groups(
-        feats, y, flip_rate,
-        n_clean_per_class=N_CLEAN_PER_CLASS, seed=SEED,
+        feats,
+        y,
+        flip_rate,
+        n_clean_per_class=N_CLEAN_PER_CLASS,
+        seed=SEED,
     )
     all_true = []
     all_scores = []
@@ -158,17 +162,19 @@ def evaluate_flip_rate(feats, y, flip_rate):
     thr, achieved_fpr, achieved_tpr = threshold_for_target_fpr(y_true, scores, TARGET_FPR)
     actual_fpr, fp, n_clean = fp_rate_at_threshold(y_true, scores, thr)
 
-    result.update({
-        "auc": auc,
-        "target_fpr": TARGET_FPR,
-        "operating_threshold": thr,
-        "roc_curve_fpr_at_threshold": achieved_fpr,
-        "roc_curve_tpr_at_threshold": achieved_tpr,
-        "actual_fp_rate_on_clean": actual_fpr,
-        "actual_fp_count": fp,
-        "n_clean_evaluated": n_clean,
-        "detection_rate_at_threshold": achieved_tpr,
-    })
+    result.update(
+        {
+            "auc": auc,
+            "target_fpr": TARGET_FPR,
+            "operating_threshold": thr,
+            "roc_curve_fpr_at_threshold": achieved_fpr,
+            "roc_curve_tpr_at_threshold": achieved_tpr,
+            "actual_fp_rate_on_clean": actual_fpr,
+            "actual_fp_count": fp,
+            "n_clean_evaluated": n_clean,
+            "detection_rate_at_threshold": achieved_tpr,
+        }
+    )
     return result, (y_true, scores)
 
 
@@ -210,16 +216,20 @@ def main():
     Xp, yp = subsample_pool(X, y, N_SAMPLE_PER_CLASS_POOL, SEED)
     print(f"Pooled subsample: {Xp.shape[0]} samples.")
     feats, scaler, pca = build_features(Xp, n_components=PCA_DIMS, seed=SEED)
-    print(f"Features: PCA -> {feats.shape[1]} dims, "
-          f"explained var={pca.explained_variance_ratio_.sum():.3f}")
+    print(
+        f"Features: PCA -> {feats.shape[1]} dims, "
+        f"explained var={pca.explained_variance_ratio_.sum():.3f}"
+    )
 
     results = []
     for fr in FLIP_RATES:
         print(f"\n=== flip_rate={fr} ===")
         res, _ = evaluate_flip_rate(feats, yp, fr)
         if res["auc"] is not None:
-            print(f"  AUC={res['auc']:.4f}  actual_FP_rate={res['actual_fp_rate_on_clean']:.4f} "
-                  f"(target {TARGET_FPR})  TPR={res['detection_rate_at_threshold']:.4f}")
+            print(
+                f"  AUC={res['auc']:.4f}  actual_FP_rate={res['actual_fp_rate_on_clean']:.4f} "
+                f"(target {TARGET_FPR})  TPR={res['detection_rate_at_threshold']:.4f}"
+            )
         else:
             print(f"  {res['auc_note']}  clean_score_mean={res['clean_score_mean']:.4f}")
         results.append(res)
@@ -278,12 +288,16 @@ def write_results_md(report, path):
     lines.append("## Feature extraction\n")
     fe = report["feature_extraction"]
     lines.append(f"- Method: {fe['method']}")
-    lines.append(f"- PCA dims: {fe['pca_dims']} "
-                 f"(explained variance sum = {fe['pca_explained_variance_ratio_sum']:.3f})")
+    lines.append(
+        f"- PCA dims: {fe['pca_dims']} "
+        f"(explained variance sum = {fe['pca_explained_variance_ratio_sum']:.3f})"
+    )
     lines.append(f"- {fe['note']}\n")
 
     lines.append("## Results per flip-rate\n")
-    lines.append("| flip_rate | ROC-AUC | target FPR | operating threshold | ACTUAL FP rate (clean) | FP count | TPR @ threshold |")
+    lines.append(
+        "| flip_rate | ROC-AUC | target FPR | operating threshold | ACTUAL FP rate (clean) | FP count | TPR @ threshold |"
+    )
     lines.append("|---|---|---|---|---|---|---|")
     for r in report["results"]:
         if r["auc"] is not None:
@@ -300,9 +314,11 @@ def write_results_md(report, path):
                 f"{r.get('fp_count_at_score_0.5')} | — |"
             )
     lines.append("")
-    lines.append("Note: flip_rate=0.0 has no poisoned samples, so ROC-AUC is undefined. "
-                 "We still report the empirical false-positive rate at fixed score "
-                 "thresholds to avoid any implicit 'zero false positives' claim.\n")
+    lines.append(
+        "Note: flip_rate=0.0 has no poisoned samples, so ROC-AUC is undefined. "
+        "We still report the empirical false-positive rate at fixed score "
+        "thresholds to avoid any implicit 'zero false positives' claim.\n"
+    )
 
     lines.append("## Provenance\n")
     p = report["provenance"]
@@ -315,12 +331,18 @@ def write_results_md(report, path):
 
     lines.append("## Honest gaps\n")
     lines.append("- Subsets are tractable (450 clean/class), not the full 50k train set.")
-    lines.append("- Feature space is generic PCA of raw pixels, not learned deep features; "
-                 "detection power on label-flips depends on class separability in this space.")
-    lines.append("- StreamingDetector.score_sample updates internal window/statistics as it "
-                 "scores; baseline is contaminated at the stated flip_rate (realistic).")
-    lines.append("- This is LABEL-FLIP detection only; clean-label / stealthy backdoors are "
-                 "out of scope and would not be caught by within-class anomaly scoring.")
+    lines.append(
+        "- Feature space is generic PCA of raw pixels, not learned deep features; "
+        "detection power on label-flips depends on class separability in this space."
+    )
+    lines.append(
+        "- StreamingDetector.score_sample updates internal window/statistics as it "
+        "scores; baseline is contaminated at the stated flip_rate (realistic)."
+    )
+    lines.append(
+        "- This is LABEL-FLIP detection only; clean-label / stealthy backdoors are "
+        "out of scope and would not be caught by within-class anomaly scoring."
+    )
 
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")

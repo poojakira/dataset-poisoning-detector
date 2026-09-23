@@ -19,6 +19,7 @@ CIFAR-10 data directory:
     from https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz and extract it
     to a local directory, then supply that path.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -171,7 +172,7 @@ def build_labelflip_groups(
     # First pass: assign clean members per class (disjoint)
     clean_idx_by_class = {}
     for c in range(NUM_CLASSES):
-        idxs = by_class[c][clean_cursor[c]: clean_cursor[c] + n_clean_per_class]
+        idxs = by_class[c][clean_cursor[c] : clean_cursor[c] + n_clean_per_class]
         clean_cursor[c] += n_clean_per_class
         if len(idxs) < n_clean_per_class:
             raise ValueError(f"Not enough samples for class {c}")
@@ -187,7 +188,7 @@ def build_labelflip_groups(
             attempts = 0
             while len(poison_idxs) < n_poison_per_class and attempts < 100000:
                 oc = other_classes[rng.integers(0, len(other_classes))]
-                pool = by_class[oc][clean_cursor[oc]:]
+                pool = by_class[oc][clean_cursor[oc] :]
                 if len(pool) == 0:
                     attempts += 1
                     continue
@@ -201,13 +202,18 @@ def build_labelflip_groups(
             if len(poison_idxs) < n_poison_per_class:
                 raise ValueError(f"Could not gather enough poison for class {c}")
 
-        member_idxs = np.concatenate(
-            [clean_idxs, np.array(poison_idxs, dtype=np.int64)]
-        ) if poison_idxs else clean_idxs
-        is_flipped = np.concatenate(
-            [np.zeros(len(clean_idxs), dtype=bool),
-             np.ones(len(poison_idxs), dtype=bool)]
-        ) if poison_idxs else np.zeros(len(clean_idxs), dtype=bool)
+        member_idxs = (
+            np.concatenate([clean_idxs, np.array(poison_idxs, dtype=np.int64)])
+            if poison_idxs
+            else clean_idxs
+        )
+        is_flipped = (
+            np.concatenate(
+                [np.zeros(len(clean_idxs), dtype=bool), np.ones(len(poison_idxs), dtype=bool)]
+            )
+            if poison_idxs
+            else np.zeros(len(clean_idxs), dtype=bool)
+        )
 
         # shuffle within group
         order = rng.permutation(len(member_idxs))
