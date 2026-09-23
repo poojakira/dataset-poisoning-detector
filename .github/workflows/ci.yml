@@ -86,7 +86,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          PYTHONPATH=src pytest tests/ -v --tb=short \
+          PYTHONPATH=src pytest tests/ -v --tb=short --timeout=120 \
             --cov=poison_detector \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
