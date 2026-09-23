@@ -721,3 +721,14 @@ async def websocket_stream(websocket: WebSocket) -> None:
     """
     if not _is_valid_api_key(websocket.headers.get("X-API-Key", "")):
         await websocket.close(code=1008, reason="Unauthorized")
+        return
+
+    await _ws_manager.connect(websocket)
+    try:
+        while True:
+            message = await websocket.receive_text()
+            await websocket.send_json({"event": "ack", "data": message})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        _ws_manager.disconnect(websocket)
