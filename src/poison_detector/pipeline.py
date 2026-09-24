@@ -351,6 +351,7 @@ class RedisConsumer(PipelineConsumer):
         """
         try:
             import redis.asyncio as aioredis
+            from redis.exceptions import ResponseError
         except ImportError:
             raise ImportError(
                 "redis package required for RedisConsumer. Install with: pip install redis"
@@ -358,12 +359,14 @@ class RedisConsumer(PipelineConsumer):
 
         try:
             self._client = aioredis.from_url(self._redis_url, decode_responses=True)
-            # Create consumer group (ignore error if already exists)
+            # XGROUP CREATE returns BUSYGROUP when the group already exists.
+            # Only that idempotent condition is safe to ignore. Authentication,
+            # ACL, network, and malformed-command failures must fail connection.
             try:
                 await self._client.xgroup_create(self._stream, self._group, id="0", mkstream=True)
-            except Exception:
-                # Group already exists
-                pass
+            except ResponseError as exc:
+                if "BUSYGROUP" not in str(exc).upper():
+                    raise
             self._running = True
             logger.info(
                 f"Connected to Redis at {self._redis_url}, "

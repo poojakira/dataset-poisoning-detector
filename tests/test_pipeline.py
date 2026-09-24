@@ -139,3 +139,37 @@ def test_dead_letter_on_processing_failure(sample_message):
     consumer.record_dead_letter()
     stats = consumer.stats
     assert stats.messages_dead_lettered == 1
+
+
+@pytest.mark.asyncio
+async def test_redis_connect_ignores_only_existing_group(monkeypatch):
+    """BUSYGROUP is idempotent and must not prevent startup."""
+    redis_asyncio = pytest.importorskip("redis.asyncio")
+    redis_exceptions = pytest.importorskip("redis.exceptions")
+    client = AsyncMock()
+    client.xgroup_create.side_effect = redis_exceptions.ResponseError(
+        "BUSYGROUP Consumer Group name already exists"
+    )
+    monkeypatch.setattr(redis_asyncio, "from_url", MagicMock(return_value=client))
+
+    consumer = RedisConsumer(redis_url="redis://example.invalid:6379", stream="test:incoming")
+    await consumer.connect()
+
+    assert consumer._running is True
+    assert consumer._client is client
+
+
+@pytest.mark.asyncio
+async def test_redis_connect_does_not_mask_acl_or_auth_errors(monkeypatch):
+    """Non-BUSYGROUP Redis failures must surface as connection failures."""
+    redis_asyncio = pytest.importorskip("redis.asyncio")
+    redis_exceptions = pytest.importorskip("redis.exceptions")
+    client = AsyncMock()
+    client.xgroup_create.side_effect = redis_exceptions.ResponseError(
+        "NOPERM this user has no permissions to run the 'xgroup' command"
+    )
+    monkeypatch.setattr(redis_asyncio, "from_url", MagicMock(return_value=client))
+
+    consumer = RedisConsumer(redis_url="redis://example.invalid:6379", stream="test:incoming")
+    with pytest.raises(ConnectionError, match="NOPERM"):
+        await consumer.connect()
