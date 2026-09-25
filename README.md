@@ -1,6 +1,6 @@
 # Dataset Poisoning Detector
 
-**Repository owner & maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira)) — I own and maintain this repository and drive its design, engineering, validation, documentation, and evidence-backed releases.
+**Maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira))
 
 Statistical screening for training data pipelines. The repository includes a
 reproducible benchmark harness for the shipped implementation and records its
@@ -381,7 +381,7 @@ The engineering value of this project is primarily in the streaming infrastructu
 
 ---
 
-## Production Readiness Assessment
+## Deployment Readiness Assessment
 
 | Criterion | Status | Notes |
 |-----------|--------|-------|
@@ -441,7 +441,7 @@ Based on the repository structure and identified limitations:
 - **Shafahi, A., et al. (2018)** - "Poison Frogs! Targeted Clean-Label Poisoning Attacks on Neural Networks." NeurIPS 2018. Demonstrates attacks that are undetectable by feature-space statistical methods.
 - **Liu, F.T., Ting, K.M., Zhou, Z.H. (2008)** - "Isolation Forest." ICDM 2008. The anomaly detection algorithm used in the ensemble.
 - **Welford, B.P. (1962)** - "Note on a Method for Calculating Corrected Sums of Squares and Products." Technometrics. The online algorithm used for streaming statistics.
-- **Goldblum, M., et al. (2022)** - "Dataset Security for Machine Learning: Data Poisoning, Backdoor Attacks, and Defenses." IEEE TPAMI. Comprehensive survey of the threat landscape.
+- **Goldblum, M., et al. (2022)** - "Dataset Security for Machine Learning: Data Poisoning, Backdoor Attacks, and Defenses." IEEE TPAMI. Survey of the threat landscape.
 - **MITRE ATLAS Framework** - https://atlas.mitre.org/ - Adversarial Threat Landscape for AI Systems.
 
 ---
