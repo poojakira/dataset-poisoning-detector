@@ -3,6 +3,7 @@
 venv/
 env/
 .venv-audit/
+.venv-test/
 
 # Python caches
 __pycache__/
