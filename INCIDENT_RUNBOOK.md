@@ -1,6 +1,17 @@
 # Incident Runbook — Dataset Poisoning Detector
 
-Operational runbook for common incidents in the streaming detection pipeline.
+> **Reference template, not an operated service.** This is an open-source
+> research/portfolio project. There is **no operated deployment, no on-call
+> rotation, no pager, and no SLA/SLO** behind this document. The scenarios,
+> response-time targets, escalation steps, health endpoints, and PagerDuty/
+> Slack/Grafana references below are a **procedure you can adapt** if you
+> deploy the detector as a streaming service — they do not describe a staffed
+> operation that exists today. Commands referencing `http://detector:8080`,
+> Kafka, Redis, Grafana, etc. assume a deployment you would stand up yourself.
+
+Reference runbook for common incidents in a streaming detection pipeline built
+on this detector. Adapt the thresholds, endpoints, and alerting to your own
+environment.
 
 ---
 
@@ -17,7 +28,7 @@ Operational runbook for common incidents in the streaming detection pipeline.
 
 ### Symptoms
 - Alert volume spikes unexpectedly
-- PagerDuty/Slack channels flooded with poison alerts
+- Your alerting channels (e.g. PagerDuty/Slack, if configured) flooded with poison alerts
 - Quarantine store growing rapidly with samples later confirmed clean
 - Metrics show `samples_flagged / samples_processed` ratio > 10%
 
@@ -77,7 +88,7 @@ curl http://detector:8080/drift-status
 - Add a human-in-the-loop feedback signal to update the model
 
 ### Escalation
-- If FP rate > 50% for > 30 minutes: page on-call ML engineer
+- If FP rate > 50% for > 30 minutes: notify whoever owns the deployment (no on-call rotation is provided by this project)
 - If source of distribution shift cannot be identified: escalate to data platform team
 
 ---
@@ -92,7 +103,7 @@ curl http://detector:8080/drift-status
 
 ### Impact
 - Poisoned samples may reach training pipeline before being flagged
-- SLA breach on detection latency (target: < 5 sec from ingestion)
+- Detection latency degrades against your own target (there is no committed SLA; e.g. you might aim for < 5 sec from ingestion)
 
 ### Diagnosis
 
@@ -150,7 +161,7 @@ redis-cli -h redis ping
 - Consider partitioning topic by data source for isolated scaling
 
 ### Escalation
-- Lag > 100,000 and growing: page on-call + data platform team
+- Lag > 100,000 and growing: notify the deployment owner + data platform team (adapt to your own alerting)
 - If training pipeline is consuming un-scanned data: trigger emergency training halt
 
 ---
@@ -226,7 +237,7 @@ curl http://detector:8080/config | jq '.drift_window'
 
 ### Escalation
 - If drift is real (confirmed distribution shift): investigate upstream data pipeline
-- If auto-tuning made bad threshold changes: disable auto-tuning, page ML engineer
+- If auto-tuning made bad threshold changes: disable auto-tuning, notify the ML owner
 
 ---
 
@@ -312,13 +323,16 @@ sqlite3 /var/lib/detector/quarantine.db \
 - Consider storing only metadata + sample ID in SQLite, with full sample data in object storage
 
 ### Escalation
-- If disk is 95%+ full and growing: page on-call immediately
+- If disk is 95%+ full and growing: treat as urgent and notify the deployment owner immediately
 - If large volume is from real poison campaign: escalate to security team
 - If data loss occurred (writes failed): document gap in audit log and notify compliance
 
 ---
 
-## General On-Call Notes
+## General Operator Notes
+
+> These are notes for whoever operates a deployment. This project does not
+> provide an on-call rotation.
 
 ### Quick Health Check
 ```bash
@@ -346,9 +360,13 @@ curl http://detector:8080/health | jq .
 | Drift alert frequency | > 3/hour | > 10/hour |
 
 ### Contacts
-- ML Platform Team: #ml-platform (Slack)
-- Data Platform: #data-infra (Slack)
-- Security: #security-ops (Slack), PagerDuty escalation policy "Security Incidents"
+
+> Placeholders — fill in for your own environment. No such channels or
+> PagerDuty escalation policy are operated by this project.
+
+- ML Platform Team: (your Slack channel)
+- Data Platform: (your Slack channel)
+- Security: (your Slack channel / your own PagerDuty escalation policy)
 
 ### Post-Incident
 1. Update this runbook if a new scenario was encountered
