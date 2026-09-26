@@ -1,3 +1,20 @@
+<!-- profile-growth-header -->
+
+# dataset-poisoning-detector
+
+> **ML data security / poisoning detection**
+
+Detect statistical and adversarial signals associated with poisoned training data.
+
+**Why this project:** security teams need a reproducible way to test, inspect, or measure this boundary before treating a security control as effective.
+
+**Quick path**
+1. Read the threat model / scope below.
+2. Run the smallest documented example.
+3. Reproduce the tests or benchmark.
+4. Inspect the limitations and evidence before making deployment claims.
+5. Open an issue or PR if you find a gap, add a fixture, or improve the documentation.
+
 # Dataset Poisoning Detector
 
 **Maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira))
