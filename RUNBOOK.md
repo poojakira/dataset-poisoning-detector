@@ -115,7 +115,7 @@ The streaming number is a **no-refit microbenchmark**. It excludes periodic Isol
 pytest -q
 ```
 
-Current GitHub Actions baseline (Python 3.12, 2026-09-21): **122 passed, 1 skipped** at **50.94% statement coverage**. Re-check the current CI run before copying these numbers into external material.
+Current local baseline (Python 3.12, fresh `.venv`): **140 passed, 0 skipped** at **69% statement coverage** (CI gate is `--cov-fail-under=45`). These are local results; re-check the current GitHub Actions run before copying these numbers into external material.
 
 ## Lint / Format / Security
 
