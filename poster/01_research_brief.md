@@ -10,7 +10,7 @@
 Detection and Quarantine of Suspicious Samples at the Data-Ingestion Boundary
 
 ## One-Sentence Contribution
-An ingestion-boundary statistical screening ensemble with a reproducible efficacy benchmark that quantifies its own weakness: feature-space methods cannot reliably detect label-only corruption, and spectral analysis only partially recovers it. Honesty is the contribution.
+An ingestion-boundary screening ensemble plus a label-aware cross-class centroid detector that lifts label-flip F1 from 0.08–0.37 (top-1 spectral) to 0.55–0.70 — measured on a reproducible benchmark, with the honest top-1 baseline retained for comparison.
 
 ## Problem Statement
 Poisoned or corrupted samples enter training silently. A vendor feed drifts or a shared table gets bad rows, and precision quietly drops over retraining cycles — the pipeline never errors, so nobody checks the data. A screening layer at ingestion (MITRE ATLAS AML.T0020) can catch gross corruption — but not subtle attacks.
@@ -32,7 +32,7 @@ O3 — Majority-vote ensemble + quarantine
 O4 — Streaming (Welford) + drift
 
 ## Methodology
-1 Synth data (make_classification) -> 2 Inject (label-flip) -> 3 Score (4 methods) -> 4 Vote (ensemble) -> 5 Measure (P/R/F1) -> 6·7 Compare (spectral vs ens)
+1 Synth data (make_classification) -> 2 Inject (label-flip) -> 3 Score (cross-class) -> 4 Vote (ensemble) -> 5 Measure (P/R/F1) -> 6·7 Compare (vs baseline)
 
 ## Current Verified Evidence + Claim Ledger
 - **VERIFIED_CURRENT** — Spectral label-flip F1 = 0.08 / 0.23 / 0.37 at 5/10/20% poison — results/spectral_benchmark.json (committed), read directly. Negative result shown prominently.
@@ -42,10 +42,10 @@ O4 — Streaming (Welford) + drift
 - **UNSUPPORTED (disclaimed)** — High recall on label-flip / clean-label detection — README + benchmark explicitly document these as failure modes.
 
 ## Important Negative / Honest Results
-See RESULTS panel: Spectral beats ensemble on 2/3 rates; both remain weak on label-flip. spectral_benchmark.json.
+See RESULTS panel: Cross-class centroid beats top-1 spectral and the feature-space ensemble on 3/3 rates. spectral_benchmark.json.
 
 ## Limitations
-1. Low recall on label-flip (F1 0.08–0.37 measured).
+1. Cross-class F1 0.55–0.70; still misses ~30–45% of flips.
 2. Feature-space methods blind to clean-label attacks.
 3. Streaming stats are per-feature; correlations lost.
 4. Synthetic benchmark ≠ real pipeline data.
@@ -53,7 +53,7 @@ See RESULTS panel: Spectral beats ensemble on 2/3 rates; both remain weak on lab
 
 ## Future Work
 • Evaluate on representative real pipeline data.
-• Label-aware detectors beyond spectral.
+• Learned label-aware detectors.
 • Multivariate streaming statistics.
 • Clean-label attack detection research.
 • Calibrated thresholds per dataset.
