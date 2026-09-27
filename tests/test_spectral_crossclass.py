@@ -24,12 +24,18 @@ from poison_detector.spectral import (
 
 def _make_flipped(rate: float, seed_data: int = 2018, seed_flip: int = 42):
     X, y = make_classification(
-        n_samples=2000, n_features=100, n_informative=20, n_redundant=5,
-        n_clusters_per_class=1, class_sep=2.0, flip_y=0.0, random_state=seed_data,
+        n_samples=2000,
+        n_features=100,
+        n_informative=20,
+        n_redundant=5,
+        n_clusters_per_class=1,
+        class_sep=2.0,
+        flip_y=0.0,
+        random_state=seed_data,
     )
     rng = np.random.RandomState(seed_flip)
     yp = y.copy()
-    c0 = np.where(y == 0)[0]
+    c0 = np.where(y == 0)[0]  # type: ignore[arg-type]  # numpy stub overload for elementwise mask
     n = int(rate * len(y))
     idx = rng.choice(c0, size=min(n, len(c0)), replace=False)
     yp[idx] = 1
@@ -37,12 +43,15 @@ def _make_flipped(rate: float, seed_data: int = 2018, seed_flip: int = 42):
 
 
 def _f1(flagged, poisoned, n):
-    yt = np.zeros(n, int); yp = np.zeros(n, int)
-    for i in poisoned: yt[i] = 1
-    for i in flagged: yp[i] = 1
+    yt = np.zeros(n, int)
+    yp = np.zeros(n, int)
+    for i in poisoned:
+        yt[i] = 1
+    for i in flagged:
+        yp[i] = 1
     if not flagged:
         return 0.0
-    return float(f1_score(yt, yp, zero_division=0.0))
+    return float(f1_score(yt, yp, zero_division=0.0))  # type: ignore[arg-type]  # sklearn stub types zero_division as str; 0.0 is a valid runtime value
 
 
 class TestCrossClassDetector:
