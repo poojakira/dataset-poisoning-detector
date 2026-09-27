@@ -459,8 +459,8 @@ def detect_label_flips_robust(
             continue
 
         k = min(n_components, len(S))
-        V_top = Vt[:k]                      # (k, n_features)
-        proj = Xc @ V_top.T                 # (class_size, k)
+        V_top = Vt[:k]  # (k, n_features)
+        proj = Xc @ V_top.T  # (class_size, k)
 
         # Whiten by singular values (Mahalanobis in the retained subspace).
         denom = (S[:k] / np.sqrt(max(class_size - 1, 1))) + ridge
