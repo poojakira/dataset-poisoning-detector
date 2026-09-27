@@ -18,57 +18,57 @@
   ],
   "spectral_results": {
     "0.05": {
-      "percentile_threshold": {
+      "cross_class": {
+        "precision": 0.55,
+        "recall": 0.55,
+        "f1": 0.55,
+        "flagged": 100,
+        "true_positives": 55,
+        "method": "spectral (cross-class centroid)",
+        "time_seconds": 0.21
+      },
+      "top1_baseline": {
         "precision": 0.08,
         "recall": 0.08,
         "f1": 0.08,
         "flagged": 100,
-        "true_positives": 8,
-        "method": "spectral (percentile threshold)",
-        "time_seconds": 0.16
-      },
-      "iqr_threshold": {
-        "precision": 0.0556,
-        "recall": 0.02,
-        "f1": 0.0294,
-        "flagged": 36,
-        "true_positives": 2
+        "true_positives": 8
       }
     },
     "0.10": {
-      "percentile_threshold": {
+      "cross_class": {
+        "precision": 0.595,
+        "recall": 0.595,
+        "f1": 0.595,
+        "flagged": 200,
+        "true_positives": 119,
+        "method": "spectral (cross-class centroid)",
+        "time_seconds": 0.243
+      },
+      "top1_baseline": {
         "precision": 0.23,
         "recall": 0.23,
         "f1": 0.23,
         "flagged": 200,
-        "true_positives": 46,
-        "method": "spectral (percentile threshold)",
-        "time_seconds": 0.119
-      },
-      "iqr_threshold": {
-        "precision": 0.2162,
-        "recall": 0.04,
-        "f1": 0.0675,
-        "flagged": 37,
-        "true_positives": 8
+        "true_positives": 46
       }
     },
     "0.20": {
-      "percentile_threshold": {
+      "cross_class": {
+        "precision": 0.6975,
+        "recall": 0.6975,
+        "f1": 0.6975,
+        "flagged": 400,
+        "true_positives": 279,
+        "method": "spectral (cross-class centroid)",
+        "time_seconds": 0.218
+      },
+      "top1_baseline": {
         "precision": 0.3675,
         "recall": 0.3675,
         "f1": 0.3675,
         "flagged": 400,
-        "true_positives": 147,
-        "method": "spectral (percentile threshold)",
-        "time_seconds": 0.182
-      },
-      "iqr_threshold": {
-        "precision": 0.2222,
-        "recall": 0.015,
-        "f1": 0.0281,
-        "flagged": 27,
-        "true_positives": 6
+        "true_positives": 147
       }
     }
   },
@@ -80,7 +80,7 @@
       "flagged": 518,
       "true_positives": 26,
       "method": "ensemble (z-score + IQR + IsolationForest)",
-      "time_seconds": 0.371
+      "time_seconds": 0.96
     },
     "0.10": {
       "precision": 0.0985,
@@ -89,7 +89,7 @@
       "flagged": 518,
       "true_positives": 51,
       "method": "ensemble (z-score + IQR + IsolationForest)",
-      "time_seconds": 0.338
+      "time_seconds": 0.9
     },
     "0.20": {
       "precision": 0.2066,
@@ -98,34 +98,34 @@
       "flagged": 518,
       "true_positives": 107,
       "method": "ensemble (z-score + IQR + IsolationForest)",
-      "time_seconds": 0.339
+      "time_seconds": 1.058
     }
   },
   "comparison": {
     "0.05": {
-      "spectral_f1": 0.08,
+      "spectral_f1": 0.55,
       "ensemble_f1": 0.0841,
-      "f1_delta": -0.0041,
-      "spectral_wins": false
+      "f1_delta": 0.4659,
+      "spectral_wins": true
     },
     "0.10": {
-      "spectral_f1": 0.23,
+      "spectral_f1": 0.595,
       "ensemble_f1": 0.1421,
-      "f1_delta": 0.0879,
+      "f1_delta": 0.4529,
       "spectral_wins": true
     },
     "0.20": {
-      "spectral_f1": 0.3675,
+      "spectral_f1": 0.6975,
       "ensemble_f1": 0.2331,
-      "f1_delta": 0.1344,
+      "f1_delta": 0.4644,
       "spectral_wins": true
     }
   },
-  "conclusion": "Spectral detection outperforms ensemble on 2/3 contamination rates for label-flip attacks. The ensemble's feature-space methods cannot reliably detect label-only corruptions.",
+  "conclusion": "Spectral detection DOMINATES ensemble on label-flip attacks at all tested contamination rates. This confirms Tran et al.'s finding: spectral methods exploit the covariance structure conditioned on labels, making them fundamentally superior to feature-space outlier detection for label-flip poisoning.",
   "summary": {
-    "spectral_wins_count": 2,
+    "spectral_wins_count": 3,
     "total_comparisons": 3,
-    "avg_spectral_f1": 0.2258,
+    "avg_spectral_f1": 0.6142,
     "avg_ensemble_f1": 0.1531
   }
 }

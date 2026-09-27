@@ -59,7 +59,7 @@ from sklearn.metrics import precision_score, recall_score, f1_score
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
-from poison_detector.spectral import spectral_detect, detect_label_flips
+from poison_detector.spectral import spectral_detect, detect_label_flips, detect_label_flips_crossclass
 from poison_detector.detector import detect
 
 
@@ -140,18 +140,21 @@ def evaluate_detection(flagged_indices: set, poisoned_indices: set, total_sample
 
 
 def run_spectral_detection(X, y_poisoned, contamination_rate):
-    """Run spectral detection and return flagged indices."""
-    # Method 1: IQR-based threshold (spectral_detect)
-    report = spectral_detect(X, y_poisoned, n_components=1, iqr_multiplier=1.5)
-    flagged_iqr = {r.sample_idx for r in report.results if r.is_poisoned}
+    """Run spectral detection and return flagged indices.
 
-    # Method 2: Percentile-based threshold (detect_label_flips)
-    flagged_percentile = set(
+    Primary method: cross-class centroid detector (strongest for label-flip).
+    Baseline: original Tran-style top-1 percentile method, kept for comparison.
+    """
+    # Primary: cross-class centroid distance (robust median centroids)
+    flagged_crossclass = set(
+        detect_label_flips_crossclass(X, y_poisoned, contamination_estimate=contamination_rate)
+    )
+    # Baseline: original top-1 percentile method
+    flagged_baseline = set(
         detect_label_flips(X, y_poisoned, contamination_estimate=contamination_rate, n_components=1)
     )
-
-    # Use the percentile-based method as primary (calibrated to contamination rate)
-    return flagged_percentile, flagged_iqr
+    # Return (primary, baseline)
+    return flagged_crossclass, flagged_baseline
 
 
 def run_ensemble_detection(X):
@@ -208,23 +211,21 @@ def main():
 
         # --- Spectral Detection ---
         t0 = time.time()
-        spectral_flagged, spectral_iqr_flagged = run_spectral_detection(X, y_poisoned, rate)
+        spectral_flagged, spectral_baseline_flagged = run_spectral_detection(X, y_poisoned, rate)
         spectral_time = time.time() - t0
 
         spectral_metrics = evaluate_detection(spectral_flagged, poisoned_indices, len(y_clean))
-        spectral_metrics["method"] = "spectral (percentile threshold)"
+        spectral_metrics["method"] = "spectral (cross-class centroid)"
         spectral_metrics["time_seconds"] = round(spectral_time, 3)
 
         # Also record IQR-based spectral for comparison
-        spectral_iqr_metrics = evaluate_detection(
-            spectral_iqr_flagged, poisoned_indices, len(y_clean)
-        )
+        spectral_baseline_metrics = evaluate_detection(spectral_baseline_flagged, poisoned_indices, len(y_clean))
 
         print(
-            f"      Spectral (percentile): P={spectral_metrics['precision']:.2f}  R={spectral_metrics['recall']:.2f}  F1={spectral_metrics['f1']:.2f}  ({spectral_metrics['flagged']} flagged)"
+            f"      Spectral (cross-class): P={spectral_metrics['precision']:.2f}  R={spectral_metrics['recall']:.2f}  F1={spectral_metrics['f1']:.2f}  ({spectral_metrics['flagged']} flagged)"
         )
         print(
-            f"      Spectral (IQR):        P={spectral_iqr_metrics['precision']:.2f}  R={spectral_iqr_metrics['recall']:.2f}  F1={spectral_iqr_metrics['f1']:.2f}  ({spectral_iqr_metrics['flagged']} flagged)"
+            f"      Spectral (top-1 baseline): P={spectral_baseline_metrics['precision']:.2f}  R={spectral_baseline_metrics['recall']:.2f}  F1={spectral_baseline_metrics['f1']:.2f}  ({spectral_baseline_metrics['flagged']} flagged)"
         )
 
         # --- Ensemble Detection ---
@@ -250,8 +251,8 @@ def main():
 
         rate_key = f"{rate:.2f}"
         results["spectral_results"][rate_key] = {
-            "percentile_threshold": spectral_metrics,
-            "iqr_threshold": spectral_iqr_metrics,
+            "cross_class": spectral_metrics,
+            "top1_baseline": spectral_baseline_metrics,
         }
         results["ensemble_results"][rate_key] = ensemble_metrics
         results["comparison"][rate_key] = {

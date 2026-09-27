@@ -38,7 +38,11 @@ environment and configuration with each run. Treat throughput as an
 environment-scoped measurement, not a hardware-independent product claim.
 **This is a screening layer, not a defense** — feature-space statistics remain
 weak against subtle/image attacks. For label-flip attacks, use the label-aware
-`spectral` method and evaluate it on data representative of your pipeline.
+`detect_label_flips_crossclass` method: on the committed Tran-style benchmark it
+reaches F1 0.55 / 0.60 / 0.70 at 5% / 10% / 20% contamination, versus 0.08 / 0.23
+/ 0.37 for the original top-1 spectral method and 0.08 / 0.14 / 0.23 for the
+feature-space ensemble. Evaluate on data representative of your pipeline before
+relying on any of these numbers.
 
 ---
 

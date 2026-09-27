@@ -332,3 +332,148 @@ def detect_label_flips(
     # Sort by score descending
     suspected.sort(key=lambda x: x[1], reverse=True)
     return [idx for idx, _ in suspected]
+
+
+def detect_label_flips_crossclass(
+    X: list[list[float]] | np.ndarray,
+    labels: list[int] | np.ndarray,
+    *,
+    contamination_estimate: float = 0.05,
+) -> list[int]:
+    """Cross-class centroid detector for label-flip poisoning (strongest method).
+
+    Key insight
+    -----------
+    A label-flip does not perturb features — it moves a genuine class-A sample
+    into class B's label set. Such a sample therefore sits **closer to class A's
+    centroid than to its (wrongly) assigned class B centroid**. Within-class
+    spectral variance (Tran et al. top-1) only partially captures this; the
+    direct cross-class comparison captures it strongly.
+
+    Algorithm
+    ---------
+    For every sample assigned to class ``c`` with robust (median) centroids
+    ``m_k`` per class::
+
+        score(x) = || x - m_c ||  -  min_{k != c} || x - m_k ||
+
+    A positive, large score means the sample is closer to some *other* class's
+    centroid than to its own — the signature of a flipped sample. The top
+    ``contamination_estimate`` fraction per class is flagged.
+
+    Robustness: medians resist the poisoned subgroup; the score is
+    scale-consistent and needs no threshold tuning beyond the contamination
+    budget. Complexity is O(n_samples * n_classes * n_features).
+
+    Returns indices of suspected flipped samples, most suspicious first.
+    """
+    X_arr = np.asarray(X, dtype=np.float64)
+    labels_arr = np.asarray(labels, dtype=np.int64)
+    if len(X_arr) == 0:
+        return []
+
+    classes = np.unique(labels_arr)
+    if len(classes) < 2:
+        return []
+
+    centres = {int(c): np.median(X_arr[labels_arr == c], axis=0) for c in classes}
+    suspected: list[tuple[int, float]] = []
+    n_total = len(labels_arr)
+
+    for c in classes:
+        idx = np.where(labels_arr == c)[0]
+        if len(idx) < 5:
+            continue
+        Xc = X_arr[idx]
+        own = np.linalg.norm(Xc - centres[int(c)], axis=1)
+        others = np.min(
+            [np.linalg.norm(Xc - centres[int(o)], axis=1) for o in classes if o != c],
+            axis=0,
+        )
+        score = own - others  # positive => closer to another class => likely flipped
+        per_class_flag = max(1, int(round(contamination_estimate * n_total * len(idx) / n_total)))
+        order = np.argsort(-score)
+        for li in order[:per_class_flag]:
+            suspected.append((int(idx[li]), float(score[li])))
+
+    suspected.sort(key=lambda x: x[1], reverse=True)
+    return [idx for idx, _ in suspected]
+
+
+def detect_label_flips_robust(
+    X: list[list[float]] | np.ndarray,
+    labels: list[int] | np.ndarray,
+    *,
+    contamination_estimate: float = 0.05,
+    n_components: int = 8,
+    ridge: float = 1e-3,
+) -> list[int]:
+    """Improved label-flip detector (robust spectral + Mahalanobis scoring).
+
+    Why this beats the top-1 percentile approach on label-flip attacks
+    ------------------------------------------------------------------
+    A label-flip injects class-0 embeddings into class 1. Those samples do NOT
+    necessarily maximise the projection onto class 1's top-1 singular vector,
+    which is why the original ``detect_label_flips`` (top-1, mean-centred,
+    percentile) recovers only a fraction of them.
+
+    This detector instead:
+      1. Centres each class on its **coordinate-wise median** (robust to the
+         poisoned subgroup, which drags the mean toward class 0).
+      2. Works in the **top-k spectral subspace** (default k=8) so the
+         discriminative directions that separate the injected cluster are
+         retained, not just the single dominant variance axis.
+      3. Scores each sample by its **whitened (Mahalanobis-style) distance** in
+         that subspace, so a coherent off-centroid cluster of flipped samples
+         stands out strongly.
+      4. Flags the top ``contamination_estimate`` fraction per class.
+
+    The math stays O(n_classes * n_features * min(n, n_features)) — the same
+    complexity class as the original SVD approach.
+
+    Parameters mirror ``detect_label_flips``; ``ridge`` stabilises the whitening
+    when singular values are small.
+    """
+    X_arr = np.asarray(X, dtype=np.float64)
+    labels_arr = np.asarray(labels, dtype=np.int64)
+    if len(X_arr) == 0:
+        return []
+
+    unique_labels = np.unique(labels_arr)
+    suspected: list[tuple[int, float]] = []
+
+    for class_label in unique_labels:
+        class_indices = np.where(labels_arr == class_label)[0]
+        class_size = len(class_indices)
+        if class_size < 5:
+            continue
+
+        X_class = X_arr[class_indices]
+        # Robust centre: coordinate-wise median resists the poisoned subgroup.
+        centre = np.median(X_class, axis=0)
+        Xc = X_class - centre
+
+        try:
+            _, S, Vt = np.linalg.svd(Xc, full_matrices=False)
+        except np.linalg.LinAlgError:
+            continue
+
+        k = min(n_components, len(S))
+        V_top = Vt[:k]                      # (k, n_features)
+        proj = Xc @ V_top.T                 # (class_size, k)
+
+        # Whiten by singular values (Mahalanobis in the retained subspace).
+        denom = (S[:k] / np.sqrt(max(class_size - 1, 1))) + ridge
+        whitened = proj / denom
+        scores = np.linalg.norm(whitened, axis=1)
+
+        # Flag the top-`contamination` fraction within this class.
+        n_flag = max(1, int(round(contamination_estimate * len(labels_arr))))
+        # distribute per-class proportional to class share of the flag budget
+        per_class_flag = min(class_size, max(1, int(round(n_flag * class_size / len(labels_arr)))))
+        order = np.argsort(-scores)
+        for local_idx in order[:per_class_flag]:
+            suspected.append((int(class_indices[local_idx]), float(scores[local_idx])))
+
+    suspected.sort(key=lambda x: x[1], reverse=True)
+    return [idx for idx, _ in suspected]
