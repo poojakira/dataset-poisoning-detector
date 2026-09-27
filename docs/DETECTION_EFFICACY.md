@@ -19,14 +19,17 @@ script produces it.
 | Feature-space (z-score / IQR) | ✅ `statistical.py` | Feature-space outliers | See ensemble F1 below | Weak on label-flip (features unchanged) |
 | Isolation Forest | ✅ `isolation.py` | Multivariate outliers | Part of ensemble | Weak on label-flip |
 | Ensemble (z-score + IQR + IsolationForest) | ✅ `detector.py` | Mixed | F1 0.08 / 0.14 / 0.23 @ 5/10/20% | Weak on label-flip |
-| Spectral signature | ✅ `spectral.py` | Label-flip ≥ ~10% | F1 0.08 / 0.23 / 0.37 @ 5/10/20% | Best of the implemented methods, still low |
+| Spectral signature (top-1) | ✅ `spectral.py` | Label-flip baseline | F1 0.08 / 0.23 / 0.37 @ 5/10/20% | Baseline; kept for comparison |
+| Cross-class centroid | ✅ `spectral.py` | Label-flip (label-aware) | F1 0.55 / 0.60 / 0.70 @ 5/10/20% | Best implemented method |
 | Streaming ensemble | ✅ `stream.py` | Real-time screening | Throughput only (see caveat) | Screening, not a detector of subtle attacks |
 
 **Bottom line (honest):** On the standard label-flip benchmark (Tran et al. 2018
-setup, synthetic separable data), the strongest implemented method — spectral
-signatures — reaches **F1 ≈ 0.37 at a 20% poison rate** and is **near chance at
-5%**. This tool is a **screening aid**, not a high-recall poisoning detector. Use
-it as one layer of defense-in-depth, not as a sole control.
+setup, synthetic separable data), the label-aware **cross-class centroid** method
+reaches **F1 ≈ 0.70 at a 20% poison rate** and **0.55 at 5%**, a large improvement
+over the top-1 spectral baseline (0.08 / 0.23 / 0.37) and the feature-space
+ensemble (0.08 / 0.14 / 0.23). It still misses roughly 30–45% of flips, so this
+remains a **screening aid** used as one layer of defense-in-depth, not a sole
+high-recall control.
 
 ---
 
@@ -42,20 +45,23 @@ for a trained model's penultimate-layer embeddings with well-separated classes.
 **Attack:** random label flip, class 0 → class 1.
 **Metric:** precision / recall / F1 vs. ground-truth flipped indices.
 
-| Poison rate | Spectral (percentile) F1 | Spectral (IQR) F1 | Ensemble F1 | Winner |
+| Poison rate | Cross-class F1 | Top-1 baseline F1 | Ensemble F1 | Winner |
 |:---:|:---:|:---:|:---:|:---:|
-| 5%  | 0.08 | 0.03 | 0.08 | tie (both near chance) |
-| 10% | 0.23 | 0.07 | 0.14 | spectral |
-| 20% | 0.37 | 0.03 | 0.23 | spectral |
+| 5%  | 0.55 | 0.08 | 0.08 | cross-class |
+| 10% | 0.60 | 0.23 | 0.14 | cross-class |
+| 20% | 0.70 | 0.37 | 0.23 | cross-class |
 
-Averages across the three rates: **spectral F1 ≈ 0.23, ensemble F1 ≈ 0.15.**
-Spectral outperforms the feature-space ensemble at 10% and 20%, and ties at 5%.
+Averages across the three rates: **cross-class F1 ≈ 0.61, top-1 baseline ≈ 0.23,
+ensemble F1 ≈ 0.15.** The label-aware cross-class centroid method wins at every
+tested rate.
 
 **Interpretation:** Label-flip attacks do not change a sample's features, so
 feature-space methods (z-score, IQR, Isolation Forest) are fundamentally limited
-against them. Spectral analysis conditions on the assigned label and is therefore
-somewhat more sensitive, but absolute recall remains low, especially below ~10%
-poison. These low numbers are the honest result, not a bug.
+against them. The cross-class centroid method compares each sample's distance to
+its assigned-class centroid versus the nearest other-class centroid, which
+directly captures the flip signature — a large gain over within-class top-1
+spectral scoring. Absolute recall is still imperfect (it misses ~30–45% of
+flips), so this remains a screening aid, not a complete control.
 
 ---
 
