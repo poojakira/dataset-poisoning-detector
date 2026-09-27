@@ -272,7 +272,7 @@ class CloudWatchChannel:
             True if delivery succeeded, False otherwise.
         """
         try:
-            import boto3
+            import boto3  # pyright: ignore[reportMissingImports]  # optional AWS dependency, not in any extra
 
             client = boto3.client("cloudwatch", region_name=self._region)
             client.put_metric_data(
