@@ -1,5 +1,3 @@
-<!-- profile-growth-header -->
-
 <!-- security-systems-poster -->
 ## Research Poster
 
@@ -9,40 +7,67 @@
 
 > Technical research poster (36 x 48 in). Click the image for the print-resolution **[PDF](poster/poster_36x48.pdf)**.
 > Every metric on it is evidence-backed; historical/projected numbers are labeled and separated from current results.
-> Part of the *Pooja Kiran - Security Systems* engineering poster collection.
 <!-- security-systems-poster -->
-
-
-# dataset-poisoning-detector
-
-> **ML data security / poisoning detection**
-
-Detect statistical and adversarial signals associated with poisoned training data.
-
-**Why this project:** security teams need a reproducible way to test, inspect, or measure this boundary before treating a security control as effective.
-
-**Quick path**
-1. Read the threat model / scope below.
-2. Run the smallest documented example.
-3. Reproduce the tests or benchmark.
-4. Inspect the limitations and evidence before making deployment claims.
-5. Open an issue or PR if you find a gap, add a fixture, or improve the documentation.
 
 # Dataset Poisoning Detector
 
+> Statistical + spectral screening for poisoned ML training data at the ingestion boundary — honest about what feature-space methods can and cannot catch.
+
+[![CI](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml/badge.svg)](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-150%20passing-brightgreen)](RUNBOOK.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira))
 
-Statistical screening for training data pipelines. The repository includes a
-reproducible benchmark harness for the shipped implementation and records its
-environment and configuration with each run. Treat throughput as an
-environment-scoped measurement, not a hardware-independent product claim.
-**This is a screening layer, not a defense** — feature-space statistics remain
-weak against subtle/image attacks. For label-flip attacks, use the label-aware
-`detect_label_flips_crossclass` method: on the committed Tran-style benchmark it
-reaches F1 0.55 / 0.60 / 0.70 at 5% / 10% / 20% contamination, versus 0.08 / 0.23
-/ 0.37 for the original top-1 spectral method and 0.08 / 0.14 / 0.23 for the
-feature-space ensemble. Evaluate on data representative of your pipeline before
-relying on any of these numbers.
+## Overview
+
+`dataset-poisoning-detector` applies statistical (z-score, IQR, Isolation Forest, ensemble) and spectral (top-1 and label-aware cross-class centroid) screening to training-data batches and streams at the ingestion boundary (MITRE ATLAS AML.T0020). It ships a Kafka streaming path, Prometheus metrics, Docker, and a reproducible benchmark harness. It is a **screening layer, not a complete defense**: feature-space statistics are strong on gross corruption and outlier injection but weak on clean-label and subtle attacks — and the README documents exactly where.
+
+## Verified Snapshot
+
+Reproduced on current `main` with the `[dev,realtime,kafka]` extras (Python 3.12). Label-flip F1 is transcribed from the committed `results/spectral_benchmark.json`.
+
+| Metric | Current verified result |
+|---|---:|
+| Tests | 150 passing, 0 skipped |
+| Statement coverage | 71% (CI gate 45%) |
+| Detection methods | z-score, IQR, Isolation Forest, ensemble, spectral top-1, cross-class centroid, streaming |
+| Cross-class label-flip F1 | 0.55 / 0.60 / 0.70 @ 5% / 10% / 20% poison |
+| Feature-space ensemble (CIFAR-10 raw pixels) | AUC ~0.53–0.56 (near-random — documented limitation) |
+
+## Security Problem
+
+Poisoned training data silently degrades models: a vendor feed drifts, a shared feature table is corrupted, or an attacker injects mislabeled/backdoor samples, and precision drops several retraining cycles later with no pipeline error. This tool screens incoming samples at ingestion so gross corruption, distribution shifts, and outlier injection are flagged with an audit trail before they reach training.
+
+## Threat Model & Scope
+
+Attack taxonomy (see [THREAT_MODEL.md](THREAT_MODEL.md)): label flipping, clean-label, backdoor triggers, feature collision, gradient-matching (Witches' Brew). ATLAS: AML.T0020.
+
+**In scope:** feature/label statistical screening of tabular/embedding data (batch + streaming); label-flip screening via cross-class centroid on model embeddings.
+
+**Out of scope / not claimed:** It cannot reliably catch clean-label attacks, subtle backdoors, low-rate (<5%) poisoning, or image-domain backdoors on raw pixels (near-random there). It is a first-pass screening aid within defense-in-depth, not a high-recall control or a sole defense. Throughput is a hardware-scoped microbenchmark, not a product SLA — no fixed throughput number is published (reproduce via `benchmarks/throughput_tracker.py`).
+
+## Architecture
+
+```text
+Ingestion (batch or Kafka stream)
+      |
+      v
+detect(X, method=...) / StreamingDetector.score_sample()
+   z-score | IQR | Isolation Forest | ensemble | spectral | cross-class centroid
+      |
+      v
+DetectionReport (per-sample anomaly scores)  -->  quarantine + Prometheus metrics + audit
+```
+
+## Core Capabilities
+
+- Feature-space detectors: z-score, IQR, Isolation Forest, majority-vote ensemble
+- Spectral label-flip detection: top-1 baseline + label-aware cross-class centroid (the best implemented method)
+- Streaming path (Kafka) with periodic Isolation Forest refit; fail-loud input validation (rejects NaN/inf/ragged/empty)
+- Quarantine storage (Redis streaming + SQLite batch), Prometheus metrics, Docker, Grafana configs
+- Reproducible benchmark harness with committed result artifacts
+
 
 ---
 
