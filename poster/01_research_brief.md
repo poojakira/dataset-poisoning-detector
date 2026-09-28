@@ -1,7 +1,7 @@
 # Research Brief — Poster 04
 
 ## Repository
-`github.com/poojakira/dataset-poisoning-detector` (public, default branch `main`, primary language Python). MIT • Python 3.12 • HEAD b45d662 • verified 2026-09-26
+`github.com/poojakira/dataset-poisoning-detector` (public, default branch `main`, primary language Python). MIT • Python 3.12 • HEAD 0688274 • verified 2026-09-26
 
 ## Academic Project Title
 **Statistical Screening for Poisoned Machine-Learning Training Data**

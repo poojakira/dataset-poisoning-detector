@@ -380,13 +380,19 @@ The repository includes `benchmark/cifar10_label_flip_benchmark.py` which evalua
 |--------|-------|
 | Detection AUC (feature-space ensemble) | 0.53 - 0.56 |
 | Spectral label-flip F1 (synthetic separable data) | 0.08 / 0.23 / 0.37 @ 5% / 10% / 20% poison |
-| Streaming throughput (z-score/IQR path, refit excluded) | ~12,400 samples/sec |
+| Cross-class centroid label-flip F1 (synthetic separable data) | 0.55 / 0.60 / 0.70 @ 5% / 10% / 20% poison |
+| Streaming throughput (z-score/IQR fast path, refit excluded) | Microbenchmark only — run `benchmarks/throughput_tracker.py`; no fixed value is published (see below) |
 | Streaming throughput (default config, with periodic IsolationForest refit) | far lower — refit dominates; tune `refit_interval` |
-| Latency p50 | 0.08 ms |
-| Latency p99 | 0.31 ms |
 | Ensemble strategy | Majority vote (>= 2/3 agree) |
 
-> See `benchmarks/BENCHMARK_METADATA.md` for full methodology. Throughput measured locally on M2/16GB with 20-dimensional features; varies with hardware and configuration.
+> See `benchmarks/BENCHMARK_METADATA.md` for full methodology and the evidence policy.
+> The label-flip F1 values above are transcribed from the committed
+> `results/spectral_benchmark.json`. Streaming throughput and per-sample latency
+> are **not** published as fixed numbers because no committed benchmark JSON
+> artifact currently records them; an earlier "~12,400 samples/sec" note lacked a
+> commit SHA and could fall back to a stub, so it is treated as historical
+> context only, not a current claim. Reproduce your own figure with
+> `benchmarks/throughput_tracker.py` on your hardware.
 
 ### Honest Assessment
 
@@ -422,11 +428,11 @@ The engineering value of this project is primarily in the streaming infrastructu
 | Containerized deployment | Yes | Multi-stage Docker, non-root user, health checks |
 | Configuration management | Yes | Pydantic-settings with env var override |
 | Monitoring and alerting | Yes | Prometheus metrics, Grafana dashboards, multi-channel alerts |
-| Streaming support | Yes | Kafka consumer, 12,400 samples/sec throughput |
+| Streaming support | Yes | Kafka consumer; per-sample fast-path scoring (throughput is hardware-dependent — reproduce via `benchmarks/throughput_tracker.py`) |
 | Quarantine storage | Yes | Redis (streaming) + SQLite (batch) |
 
 > **Storage boundary:** `PostgresStore` is a deliberate stub and raises `NotImplementedError`; PostgreSQL quarantine persistence is **not implemented or supported** in the current repository. Supported paths are Redis for streaming quarantine and SQLite for batch/local storage.
-| Test coverage | Yes | 14 test modules, 140 tests collected and passing (0 skipped), covering all components incl. input-validation hardening |
+| Test coverage | Yes | 15 test modules, 150 tests collected and passing (0 skipped) with the `[dev,realtime,kafka]` extras, covering all components incl. input-validation hardening |
 | CI/CD | Yes | GitHub Actions (`.github/` directory) |
 | Runbook | Yes | `RUNBOOK.md` with operational procedures |
 | Changelog | Yes | `CHANGELOG.md` with version history |
@@ -485,7 +491,7 @@ Based on the repository structure and identified limitations:
 
 - [INCIDENT_RUNBOOK.md](INCIDENT_RUNBOOK.md) - incident response for streaming pipeline issues
 - [docs/DETECTION_EFFICACY.md](docs/DETECTION_EFFICACY.md) - honest detection performance assessment per method
-- [enchmarks/throughput_tracker.py](benchmarks/throughput_tracker.py) - throughput regression gate (>10k samples/sec)
+- [benchmarks/throughput_tracker.py](benchmarks/throughput_tracker.py) - streaming/efficacy microbenchmark and CI sanity/reproducibility gate (not a hardware performance SLA)
 
 ## License and Author
 
