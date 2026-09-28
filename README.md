@@ -6,6 +6,7 @@
 [![Research poster](poster/poster.png)](poster/poster_36x48.pdf)
 
 > Technical research poster (36 x 48 in). Click the image for the print-resolution **[PDF](poster/poster_36x48.pdf)**.
+> Poster measurements are dated snapshots at their printed commits. Use the repository evidence files for newer results; do not read the poster as a verification of the latest `main`.
 > Every metric on it is evidence-backed; historical/projected numbers are labeled and separated from current results.
 <!-- security-systems-poster -->
 

@@ -1,5 +1,7 @@
 # Research Brief — Poster 04
 
+> Evidence status: This is a dated repository snapshot at the commit identified below. `VERIFIED_AT_SNAPSHOT` means verified for that commit and environment; it does not assert the same result on the latest `main`. Compare newer claims with the repository evidence before reuse.
+
 ## Repository
 `github.com/poojakira/dataset-poisoning-detector` (public, default branch `main`, primary language Python). MIT • Python 3.12 • HEAD 0688274 • verified 2026-09-26
 
@@ -34,10 +36,10 @@ O4 — Streaming (Welford) + drift
 ## Methodology
 1 Synth data (make_classification) -> 2 Inject (label-flip) -> 3 Score (cross-class) -> 4 Vote (ensemble) -> 5 Measure (P/R/F1) -> 6·7 Compare (vs baseline)
 
-## Current Verified Evidence + Claim Ledger
-- **VERIFIED_CURRENT** — Spectral label-flip F1 = 0.08 / 0.23 / 0.37 at 5/10/20% poison — results/spectral_benchmark.json (committed), read directly. Negative result shown prominently.
-- **VERIFIED_CURRENT** — Spectral beats ensemble on 2/3 contamination rates — spectral_benchmark.json comparison block; both remain weak on label-flip.
-- **VERIFIED_CURRENT** — 4 methods: z-score, IQR, IsolationForest, spectral; majority vote >=2/3 — README architecture + module table.
+## Evidence at Poster Snapshot + Claim Ledger
+- **VERIFIED_AT_SNAPSHOT** — Spectral label-flip F1 = 0.08 / 0.23 / 0.37 at 5/10/20% poison — results/spectral_benchmark.json (committed), read directly. Negative result shown prominently.
+- **VERIFIED_AT_SNAPSHOT** — Spectral beats ensemble on 2/3 contamination rates — spectral_benchmark.json comparison block; both remain weak on label-flip.
+- **VERIFIED_AT_SNAPSHOT** — 4 methods: z-score, IQR, IsolationForest, spectral; majority vote >=2/3 — README architecture + module table.
 - **PARTIAL** — Streaming throughput — BENCHMARK_METADATA.md: environment-scoped microbenchmark; prior '~12,400/s' note demoted to historical (no SHA). Not shown as current.
 - **UNSUPPORTED (disclaimed)** — High recall on label-flip / clean-label detection — README + benchmark explicitly document these as failure modes.
 
