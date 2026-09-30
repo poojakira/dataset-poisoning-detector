@@ -39,10 +39,10 @@ Password reset and browser XSS unless a user-account web UI is introduced.
 
 ## Verification checkpoint — 2026-09-30
 
-- **Snapshot commit:** `57696034bc197c6fe7bed39b5806788965432a6e`
+- **Checked snapshot:** `7e1efe303174d67cf7b82368d151d8a7f421743b`
 - **Status:** VERIFIED GREEN
-- **Evidence:** Security Hygiene, Documentation Integrity, CI, and Production Gate all completed successfully on the current main revision.
-- This checkpoint is intentionally date-bounded. It does not claim zero vulnerabilities or universal production readiness.
+- **Evidence:** CI, Production Gate, Security Hygiene, and Documentation Integrity completed successfully for the cited checked snapshot.
+- This record is immutable and date-bounded. Later `main` commits may be newer; consult GitHub Actions for the latest run state. It does not claim zero vulnerabilities or universal production readiness.
 
 <!-- hardening-followup-20260930:start -->
 ## Follow-up hardening — 2026-09-30
