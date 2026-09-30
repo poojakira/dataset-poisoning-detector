@@ -59,7 +59,9 @@ class DatasetScanResult:
             "suspected_poison_count": len(self.suspected_poison_rows),
             "suspected_poison_rows": self.suspected_poison_rows[:50],
             "per_class_flagged": self.per_class_flagged,
-            "verdict": "POISON_SUSPECTED" if self.poison_suspected else "clean",
+            "verdict": "ERROR"
+            if self.errors
+            else ("POISON_SUSPECTED" if self.poison_suspected else "clean"),
             "errors": self.errors,
         }
 
@@ -79,13 +81,36 @@ def parse_hf_dataset_reference(url_or_id: str) -> str | None:
     return None
 
 
-def _get_json(url: str, timeout: int = 30) -> dict[str, Any]:
+class _DatasetRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _validate_api_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _validate_api_url(url: str) -> None:
     parsed = urllib.parse.urlparse(url)
-    if parsed.scheme not in {"http", "https"}:
-        raise ValueError("URL must use http or https")
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "datasets-server.huggingface.co"
+        or parsed.port not in (None, 443)
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise ValueError("Dataset API target must use the approved HTTPS origin")
+
+
+def _get_json(url: str, timeout: int = 30) -> dict[str, Any]:
+    _validate_api_url(url)
     req = urllib.request.Request(url, headers={"User-Agent": "poison-detector/0.2"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
-        return json.loads(resp.read())
+    opener = urllib.request.build_opener(_DatasetRedirectHandler())
+    with opener.open(req, timeout=timeout) as resp:
+        raw = resp.read(10 * 1024 * 1024 + 1)
+        if len(raw) > 10 * 1024 * 1024:
+            raise ValueError("Dataset API response exceeds safety limit")
+        result = json.loads(raw)
+        if not isinstance(result, dict):
+            raise ValueError("Dataset API response must be an object")
+        return result
 
 
 def _fetch_rows(dataset: str, config: str, split: str, n: int) -> list[dict[str, Any]]:
@@ -168,6 +193,13 @@ def scan_hf_dataset(
     dataset = parse_hf_dataset_reference(url_or_id)
     if dataset is None:
         raise ValueError(f"Could not parse a HuggingFace dataset id from: {url_or_id!r}")
+
+    if (
+        not isinstance(max_rows, int)
+        or isinstance(max_rows, bool)
+        or not 1 <= max_rows <= _MAX_ROWS
+    ):
+        raise ValueError(f"max_rows must be between 1 and {_MAX_ROWS}")
 
     result = DatasetScanResult(
         dataset=dataset,

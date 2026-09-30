@@ -58,6 +58,7 @@ from typing import Any
 import numpy as np
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
@@ -141,6 +142,8 @@ class BatchRequest(BaseModel):
                     f"All samples must have the same feature dimension; "
                     f"sample 0 has {expected_dim}, sample {i} has {len(sample)}"
                 )
+            if not all(math.isfinite(value) for value in sample):
+                raise ValueError("features must contain only finite numeric values")
             total_values += len(sample)
             if total_values > 200000:
                 raise ValueError("Batch exceeds 200000 total feature values")
@@ -193,8 +196,18 @@ class RateLimiter:
         self._requests: dict[str, list[float]] = defaultdict(list)
 
     def is_allowed(self, identity: str) -> bool:
-        now = time.time()
+        now = time.monotonic()
         window_start = now - self._window_seconds
+        if identity not in self._requests and len(self._requests) >= 10000:
+            stale = [
+                key
+                for key, stamps in self._requests.items()
+                if not stamps or stamps[-1] <= window_start
+            ]
+            for key in stale:
+                self._requests.pop(key, None)
+            if len(self._requests) >= 10000:
+                return False
         self._requests[identity] = [t for t in self._requests[identity] if t > window_start]
         if len(self._requests[identity]) >= self._max_requests:
             return False
@@ -304,7 +317,7 @@ _MAX_INFLIGHT_SCORING = int(os.environ.get("POISON_MAX_INFLIGHT_SCORING", "16"))
 _MAX_WS_CONNECTIONS = int(os.environ.get("POISON_MAX_WS_CONNECTIONS", "64"))
 _MAX_WS_MESSAGES_PER_MINUTE = int(os.environ.get("POISON_MAX_WS_MESSAGES_PER_MINUTE", "60"))
 _MAX_WS_MESSAGE_BYTES = int(os.environ.get("POISON_MAX_WS_MESSAGE_BYTES", "4096"))
-if _SCORE_TIMEOUT_SECONDS <= 0:
+if not math.isfinite(_SCORE_TIMEOUT_SECONDS) or _SCORE_TIMEOUT_SECONDS <= 0:
     raise RuntimeError("POISON_SCORE_TIMEOUT_SECONDS must be positive")
 if _MAX_INFLIGHT_SCORING < 1 or _MAX_INFLIGHT_SCORING > 128:
     raise RuntimeError("POISON_MAX_INFLIGHT_SCORING must be between 1 and 128")
@@ -383,6 +396,52 @@ app = FastAPI(
 )
 
 
+class BodySizeLimitMiddleware:
+    """Bound bytes from the ASGI stream, including chunked bodies, before parsing."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        chunks = []
+        total = 0
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            chunk = message.get("body", b"")
+            total += len(chunk)
+            if total > _MAX_REQUEST_BYTES:
+                response = JSONResponse(
+                    status_code=413, content={"detail": "Request body too large"}
+                )
+                return await response(scope, receive, send)
+            chunks.append(chunk)
+            if not message.get("more_body", False):
+                break
+        pending = True
+
+        async def replay():
+            nonlocal pending
+            if pending:
+                pending = False
+                return {"type": "http.request", "body": b"".join(chunks), "more_body": False}
+            return await receive()
+
+        await self.app(scope, replay, send)
+
+
+app.add_middleware(BodySizeLimitMiddleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    # Pydantic's default response includes the rejected input, which may contain secrets.
+    return JSONResponse(status_code=422, content={"detail": "Invalid request payload"})
+
+
 # --- Middleware ---
 
 # Endpoints that bypass authentication (monitoring/health checks only).
@@ -396,7 +455,9 @@ _EXPECTED_API_KEY: str = os.environ.get("API_KEY", "")
 def _is_valid_api_key(provided_key: str) -> bool:
     """Return whether a provided API key is configured and valid."""
     return bool(
-        _EXPECTED_API_KEY and provided_key and hmac.compare_digest(provided_key, _EXPECTED_API_KEY)
+        _EXPECTED_API_KEY
+        and provided_key
+        and hmac.compare_digest(provided_key.encode("utf-8"), _EXPECTED_API_KEY.encode("utf-8"))
     )
 
 
@@ -464,7 +525,13 @@ async def rate_limit_middleware(request: Request, call_next: Any) -> Any:
     if request.url.path in ("/health", "/stats", "/metrics"):
         return await call_next(request)
 
-    api_key = request.headers.get("X-API-Key", "anonymous")
+    supplied_key = request.headers.get("X-API-Key", "")
+    # Invalid keys share a peer bucket; changing attacker-controlled keys must not bypass limits.
+    api_key = (
+        supplied_key
+        if _is_valid_api_key(supplied_key)
+        else (request.client.host if request.client else "anonymous")
+    )
     identity = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:24]
     try:
         allowed = _rate_limiter.is_allowed(identity)
@@ -484,6 +551,34 @@ async def rate_limit_middleware(request: Request, call_next: Any) -> Any:
 
 
 # --- Endpoints ---
+
+
+_active_jobs: set[asyncio.Task] = set()
+
+
+async def _run_bounded(function, argument, slots, timeout):
+    # A timed-out thread keeps running. Retain its slot until it actually exits.
+    # Reject saturation instead of creating an unbounded queue of requests.
+    if slots.locked():
+        raise HTTPException(status_code=503, detail="Service busy")
+    await slots.acquire()
+
+    async def work():
+        try:
+            return await run_in_threadpool(function, argument)
+        finally:
+            slots.release()
+
+    task = asyncio.create_task(work())
+    _active_jobs.add(task)
+
+    def finished(job):
+        _active_jobs.discard(job)
+        if not job.cancelled():
+            job.exception()  # Retrieve failures after an HTTP timeout/disconnect.
+
+    task.add_done_callback(finished)
+    return await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
 
 
 def _score_one_sync(features: list[float]) -> ScoringResult:
@@ -512,13 +607,13 @@ async def score_sample(request: SampleRequest) -> ScoringResponse:
         )
 
     try:
-        async with _scoring_slots:
-            result = await asyncio.wait_for(
-                run_in_threadpool(_score_one_sync, request.features),
-                timeout=_SCORE_TIMEOUT_SECONDS,
-            )
+        result = await _run_bounded(
+            _score_one_sync, request.features, _scoring_slots, _SCORE_TIMEOUT_SECONDS
+        )
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=504, detail="Scoring timed out") from exc
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=500,
@@ -563,13 +658,13 @@ async def score_batch(request: BatchRequest) -> BatchResponse:
     start = time.perf_counter()
 
     try:
-        async with _scoring_slots:
-            raw_results = await asyncio.wait_for(
-                run_in_threadpool(_score_batch_sync, request.samples),
-                timeout=_SCORE_TIMEOUT_SECONDS,
-            )
+        raw_results = await _run_bounded(
+            _score_batch_sync, request.samples, _scoring_slots, _SCORE_TIMEOUT_SECONDS
+        )
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=504, detail="Batch scoring timed out") from exc
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=500,
@@ -658,7 +753,7 @@ async def readiness_check() -> JSONResponse:
             status_code=503,
             content={
                 "status": "not_ready",
-                "reason": _BASELINE_LOAD_ERROR or "baseline below minimum size",
+                "reason": "baseline unavailable or invalid",
             },
         )
     if not _rate_limiter.ready():
@@ -727,7 +822,9 @@ async def websocket_stream(websocket: WebSocket) -> None:
         {"event": "poison_detected", "score": 0.85, "method_votes": {...}}
         {"event": "batch_scored", "total_samples": 100, "poisoned_count": 5}
     """
-    if not _is_valid_api_key(websocket.headers.get("X-API-Key", "")):
+    if (_ENVIRONMENT == "production" and len(_EXPECTED_API_KEY) < 32) or not _is_valid_api_key(
+        websocket.headers.get("X-API-Key", "")
+    ):
         await websocket.close(code=1008, reason="Unauthorized")
         return
     if _ws_manager.connection_count >= _MAX_WS_CONNECTIONS:

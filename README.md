@@ -564,3 +564,13 @@ Keep runtime credentials outside Git. If this repository provides an `.env.examp
 Do not commit AWS access keys or session credentials, API tokens, service-account JSON, private keys, package-manager credentials, Terraform state, or secret-bearing `tfvars`. CI/deployment credentials belong in GitHub Actions secrets or the deployment provider's secret manager. AWS account IDs are identifiers; AWS access-key IDs, secret access keys, and session tokens are credentials.
 
 If a real credential is ever exposed, revoke or rotate it at the provider first, then remove it from the working tree and reachable Git history. The Security Hygiene workflow checks the current tree and reachable history for common credential formats without printing matched secret values.
+
+## Security review and deployment boundaries
+
+See [the September 30, 2026 security review](SECURITY_REVIEW_2026-09-30.md) for verified fixes, actual test results, authentication versus resource authorization, secret-scan scope, and remaining deployment limitations. A passing scan or test suite does not certify that untrusted artifacts are safe.
+
+### Your own local configuration
+
+Create your own local `.env` file for deployment configuration; it is ignored by Git. Use your own newly generated `API_KEY` and your own narrowly scoped provider credentials. No repository-owner keys or shared credentials are supplied. Never commit populated environment files or paste credentials into issues, logs, or scan reports. Load `.env` explicitly through your deployment tooling; these services read process environment variables and do not automatically load that file.
+
+Set your own `API_KEY`, trusted `POISON_BASELINE_PATH`, and deployment settings. Production also requires your own `POISON_REDIS_URL`; secure Redis with your own credentials and TLS where appropriate.

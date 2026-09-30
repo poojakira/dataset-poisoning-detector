@@ -77,3 +77,6 @@ terraform.tfvars
 *.jks
 *.keystore
 *.pkcs12
+
+# Environment files with custom prefixes
+*.env
