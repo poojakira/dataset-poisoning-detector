@@ -548,3 +548,10 @@ Building this taught a few things worth sharing:
 - **Security note:** Production rate limiting and authentication remain fail-closed as documented; no synthetic benchmark result is presented as production efficacy.
 - **Evidence boundary:** This update records repository and GitHub Actions evidence observed during the pass. It is not a claim of independent penetration testing, production deployment, or zero residual risk.
 <!-- repo-verification:end -->
+
+## Verification checkpoint — 2026-09-30
+
+- **Snapshot commit:** `57696034bc197c6fe7bed39b5806788965432a6e`
+- **Status:** VERIFIED GREEN
+- **Evidence:** Security Hygiene, Documentation Integrity, CI, and Production Gate all completed successfully on the current main revision.
+- This checkpoint is intentionally date-bounded. It does not claim zero vulnerabilities or universal production readiness.
