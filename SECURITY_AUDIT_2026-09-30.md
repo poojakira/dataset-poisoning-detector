@@ -43,3 +43,12 @@ Password reset and browser XSS unless a user-account web UI is introduced.
 - **Status:** VERIFIED GREEN
 - **Evidence:** Security Hygiene, Documentation Integrity, CI, and Production Gate all completed successfully on the current main revision.
 - This checkpoint is intentionally date-bounded. It does not claim zero vulnerabilities or universal production readiness.
+
+<!-- hardening-followup-20260930:start -->
+## Follow-up hardening — 2026-09-30
+
+- The current WebSocket implementation already enforces authenticated upgrades, a bounded connection count, maximum message bytes, and per-connection inbound message rate limits. Earlier audit language listing those controls as pending is therefore superseded by the current source state.
+- Error/readiness responses remain generic at the public boundary. Baseline loading uses `allow_pickle=False`, and production rate limiting requires a Redis backend.
+- WebSocket broadcasts intentionally operate within one shared authenticated trust domain. Do not share one instance/key between mutually untrusted tenants; tenant-aware event authorization would be a separate architecture feature.
+- The repository workflow-policy scanner was hardened on `main`; Redis/Kafka TLS/authentication and ingress-level WebSocket/TLS limits remain deployment controls.
+<!-- hardening-followup-20260930:end -->
