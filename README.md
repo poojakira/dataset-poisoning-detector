@@ -538,3 +538,13 @@ Building this taught a few things worth sharing:
 **The infrastructure is often more valuable than the algorithm.** The streaming pipeline, monitoring, quarantine workflow, and deployment stack are reusable regardless of which detection method you plug in. Algorithms improve; operational patterns persist.
 
 **Defense-in-depth means every layer contributes signal, even imperfect ones.** A screening layer that catches 10% of attacks at zero latency cost is still a net security improvement when combined with downstream defenses. Perfect is the enemy of deployed.
+
+<!-- repo-verification:start -->
+## Verification update — 2026-09-30
+
+- **Scope:** Account-wide `poojakira` repository pass covering source/configuration, CI/release workflows, security-hygiene gates, dependency/SAST controls, and documentation consistency.
+- **Remediation:** Pinned the PyPI publish action to an immutable commit and rechecked the repository security posture without weakening API-key, rate-limit, or validation controls.
+- **Verification state:** The latest completed core CI, Production Gate, Security Hygiene, and Documentation Integrity checks were green before the release-workflow pin; the pin itself is repository-only hardening.
+- **Security note:** Production rate limiting and authentication remain fail-closed as documented; no synthetic benchmark result is presented as production efficacy.
+- **Evidence boundary:** This update records repository and GitHub Actions evidence observed during the pass. It is not a claim of independent penetration testing, production deployment, or zero residual risk.
+<!-- repo-verification:end -->
