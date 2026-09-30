@@ -7,8 +7,8 @@
 
 | ID | Severity | Finding | Status |
 |---|---|---|---|
-| DPD-001 | Low | Scoring failures expose the Python exception class name in public 500 responses. | Open |
-| DPD-002 | Low | An unused `traceback` import increases the chance of future accidental traceback exposure. | Open |
+| DPD-001 | Low | Public scoring failures now return the generic `Scoring failed` response without exception class or traceback details. | Fixed |
+| DPD-002 | Low | The unused `traceback` import is no longer present in the API module. | Fixed |
 | DPD-003 | Info | Dataset URL scanning resolves only Hugging Face dataset IDs into fixed datasets-server endpoints; arbitrary caller URLs are not fetched. | Verified |
 
 ## Existing controls verified
