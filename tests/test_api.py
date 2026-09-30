@@ -276,7 +276,8 @@ def test_websocket_stream_receives_events(monkeypatch):
         # Should receive an ack event
         response = ws.receive_json()
         assert response["event"] == "ack"
-        assert response["data"] == "ping"
+        assert response["event"] == "ack"
+        assert "data" not in response
 
 
 def test_only_one_readiness_route_is_registered(monkeypatch, tmp_path):
