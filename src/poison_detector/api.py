@@ -50,7 +50,6 @@ import math
 import os
 import time
 import threading
-import traceback
 from pathlib import Path
 from collections import defaultdict
 from dataclasses import asdict
@@ -511,10 +510,10 @@ async def score_sample(request: SampleRequest) -> ScoringResponse:
             )
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=504, detail="Scoring timed out") from exc
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=500,
-            detail=f"Scoring error: {type(e).__name__}",
+            detail="Scoring failed",
         )
 
     response = ScoringResponse(
@@ -562,10 +561,10 @@ async def score_batch(request: BatchRequest) -> BatchResponse:
             )
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=504, detail="Batch scoring timed out") from exc
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=500,
-            detail=f"Batch scoring error: {type(e).__name__}",
+            detail="Batch scoring failed",
         )
 
     results = [
