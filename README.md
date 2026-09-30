@@ -574,3 +574,13 @@ See [the September 30, 2026 security review](SECURITY_REVIEW_2026-09-30.md) for 
 Create your own local `.env` file for deployment configuration; it is ignored by Git. Use your own newly generated `API_KEY` and your own narrowly scoped provider credentials. No repository-owner keys or shared credentials are supplied. Never commit populated environment files or paste credentials into issues, logs, or scan reports. Load `.env` explicitly through your deployment tooling; these services read process environment variables and do not automatically load that file.
 
 Set your own `API_KEY`, trusted `POISON_BASELINE_PATH`, and deployment settings. Production also requires your own `POISON_REDIS_URL`; secure Redis with your own credentials and TLS where appropriate.
+
+<!-- security-local-config:start -->
+## Secrets and local configuration
+
+- Never commit real API keys, access tokens, passwords, cloud credentials, private keys, or a populated `.env` file.
+- Local `.env` and `.env.*` files are ignored by Git. Only safe templates such as `.env.example` or `.env.sample` may be committed, and they must contain placeholder or empty values only.
+- If an integration needs credentials, create your own local `.env` file (or use your shell/secret manager) and supply **your own** API key. In GitHub Actions, use repository/environment secrets rather than hard-coding values in workflow YAML.
+- Do not copy or reuse any credential that appears in repository history, examples, tests, screenshots, logs, or documentation. Test strings are not intended to be usable credentials.
+- If a real credential is ever committed, **revoke or rotate it at the credential provider first**, then remove it from the current tree and reachable Git history. Deleting a key from GitHub does not revoke it.
+<!-- security-local-config:end -->
