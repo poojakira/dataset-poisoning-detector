@@ -1,374 +1,147 @@
 # Incident Runbook — Dataset Poisoning Detector
 
-> **Reference template, not an operated service.** This is an open-source
-> research/portfolio project. There is **no operated deployment, no on-call
-> rotation, no pager, and no SLA/SLO** behind this document. The scenarios,
-> response-time targets, escalation steps, health endpoints, and PagerDuty/
-> Slack/Grafana references below are a **procedure you can adapt** if you
-> deploy the detector as a streaming service — they do not describe a staffed
-> operation that exists today. Commands referencing `http://detector:8080`,
-> Kafka, Redis, Grafana, etc. assume a deployment you would stand up yourself.
+This runbook covers only behavior implemented in the current repository. It is a research/portfolio project, not an operated production service: there is no on-call rotation, pager, SLA, or managed deployment behind these instructions.
 
-Reference runbook for common incidents in a streaming detection pipeline built
-on this detector. Adapt the thresholds, endpoints, and alerting to your own
-environment.
+## Implemented operational surfaces
 
----
+The FastAPI service currently exposes:
 
-## Table of Contents
+- `GET /health` — unauthenticated process health
+- `GET /ready` — unauthenticated readiness; requires a valid startup baseline
+- `POST /score` — authenticated single-sample scoring
+- `POST /batch` — authenticated batch scoring
+- `GET /stats` — authenticated detector statistics
+- `GET /metrics` — authenticated Prometheus output
+- `WS /stream` — authenticated WebSocket stream
 
-1. [High False Positive Rate in Streaming](#1-high-false-positive-rate-in-streaming)
-2. [Kafka Consumer Lag Building Up](#2-kafka-consumer-lag-building-up)
-3. [Drift Detector Flapping](#3-drift-detector-flapping)
-4. [Quarantine Storage Filling Up](#4-quarantine-storage-filling-up)
+Protected endpoints require `X-API-Key`. There is **no** runtime `/config`, alert-pause, drift-reset/suppress, quarantine-management, or bulk-review API in the current code.
 
----
+## Local demo prerequisites
 
-## 1. High False Positive Rate in Streaming
-
-### Symptoms
-- Alert volume spikes unexpectedly
-- Your alerting channels (e.g. PagerDuty/Slack, if configured) flooded with poison alerts
-- Quarantine store growing rapidly with samples later confirmed clean
-- Metrics show `samples_flagged / samples_processed` ratio > 10%
-
-### Impact
-- Analyst fatigue — real poisoned samples get buried
-- Quarantine storage fills faster (see Scenario 4)
-- Downstream training pipelines stalled waiting for review
-
-### Diagnosis
+Copy the environment template and provide your own values:
 
 ```bash
-# Check current false positive rate
-curl http://detector:8080/metrics | grep -E "flagged|processed"
-
-# Inspect recent quarantined samples
-sqlite3 /var/lib/detector/quarantine.db \
-  "SELECT id, score, reason, quarantined_at FROM quarantine ORDER BY quarantined_at DESC LIMIT 20;"
-
-# Check if input distribution shifted
-curl http://detector:8080/drift-status
+cp .env.example .env
 ```
 
-**Root cause checklist:**
-- [ ] Did the upstream data source change format or schema?
-- [ ] Did a model retrain reset the feature space?
-- [ ] Is the detection threshold set too low for this data modality?
-- [ ] Did the drift detector update the baseline to an anomalous window?
+At minimum, set a strong local `API_KEY` and `GRAFANA_ADMIN_PASSWORD`. Never commit `.env`.
 
-### Resolution
-
-**Immediate (< 5 min):**
-1. Raise the detection threshold temporarily:
-   ```bash
-   curl -X POST http://detector:8080/config \
-     -d '{"threshold": 5.0}'  # default is 3.0
-   ```
-2. Pause alerting for non-critical severities:
-   ```bash
-   curl -X POST http://detector:8080/alerting/pause \
-     -d '{"min_severity": "error"}'
-   ```
-
-**Short-term (< 1 hour):**
-1. Inspect the feature distribution of recent samples vs. the baseline window
-2. If upstream data changed: reset the drift baseline:
-   ```bash
-   curl -X POST http://detector:8080/drift/reset-baseline
-   ```
-3. Review and bulk-approve quarantined samples from the spike period:
-   ```bash
-   python scripts/bulk_review.py --since "2h ago" --action approve
-   ```
-
-**Long-term:**
-- Tune threshold per data modality (tabular vs. image vs. text)
-- Implement adaptive thresholding based on rolling FP rate
-- Add a human-in-the-loop feedback signal to update the model
-
-### Escalation
-- If FP rate > 50% for > 30 minutes: notify whoever owns the deployment (no on-call rotation is provided by this project)
-- If source of distribution shift cannot be identified: escalate to data platform team
-
----
-
-## 2. Kafka Consumer Lag Building Up
-
-### Symptoms
-- Grafana alert: consumer lag > 10,000 messages
-- Detection results delayed (stale timestamps in quarantine)
-- Metrics show `messages_received` rate dropping or flat
-- Kafka consumer group shows increasing offset lag
-
-### Impact
-- Poisoned samples may reach training pipeline before being flagged
-- Detection latency degrades against your own target (there is no committed SLA; e.g. you might aim for < 5 sec from ingestion)
-
-### Diagnosis
+Start the checked-in demo stack:
 
 ```bash
-# Check consumer lag
-kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
-  --group poison-detector --describe
-
-# Check detector health
-curl http://detector:8080/health
-
-# Check for processing errors
-docker logs detector --since 10m 2>&1 | grep -i "error\|exception\|timeout"
-
-# Check Redis connectivity (used for dedup cache)
-redis-cli -h redis ping
+docker compose config
+docker compose up -d --build
+docker compose ps
 ```
 
-**Root cause checklist:**
-- [ ] Ingestion rate spiked (batch upload, replay, new data source)?
-- [ ] Detector pod OOM-killed or restarting?
-- [ ] Redis down (dedup lookups timing out)?
-- [ ] Single slow method in ensemble blocking pipeline?
-- [ ] Network partition between consumer and Kafka brokers?
+The API is exposed on `http://127.0.0.1:8000`.
 
-### Resolution
+## 1. API process is unhealthy
 
-**Immediate (< 5 min):**
-1. Scale consumers horizontally:
-   ```bash
-   kubectl scale deployment detector --replicas=4
-   ```
-2. Check if Redis is responsive; restart if needed:
-   ```bash
-   kubectl rollout restart deployment redis
-   ```
-
-**Short-term (< 1 hour):**
-1. If a single ensemble method is slow, disable it temporarily:
-   ```bash
-   curl -X POST http://detector:8080/config \
-     -d '{"ensemble_methods": ["zscore", "iqr"]}'  # drop "isolation" if refit is the bottleneck
-   ```
-2. Increase consumer batch size to improve throughput:
-   ```bash
-   curl -X POST http://detector:8080/config \
-     -d '{"batch_size": 128}'  # default 64
-   ```
-3. If ingestion spike is temporary, wait for consumers to catch up after scaling.
-
-**Long-term:**
-- Set up auto-scaling based on consumer lag metric
-- Implement circuit breaker for slow ensemble methods
-- Add backpressure signaling to upstream producers
-- Consider partitioning topic by data source for isolated scaling
-
-### Escalation
-- Lag > 100,000 and growing: notify the deployment owner + data platform team (adapt to your own alerting)
-- If training pipeline is consuming un-scanned data: trigger emergency training halt
-
----
-
-## 3. Drift Detector Flapping
-
-### Symptoms
-- Alternating drift-detected / no-drift alerts in rapid succession
-- Slack channel showing drift alerts every few minutes
-- Metrics show `drift_triggered` toggling ON/OFF repeatedly
-- Baseline resets happening too frequently
-
-### Impact
-- Alert fatigue (analysts ignore real drift events)
-- Unstable threshold adjustments if auto-tuning is enabled
-- Intermittent performance degradation during baseline recalculation
-
-### Diagnosis
+Check the process and recent logs:
 
 ```bash
-# Check drift history
-curl http://detector:8080/drift/history?last=20
-
-# Check drift score time series
-curl http://detector:8080/metrics | grep drift_score
-
-# Inspect window size vs data rate
-curl http://detector:8080/config | jq '.drift_window'
+curl -fsS http://127.0.0.1:8000/health
+docker compose ps api
+docker compose logs --since=10m api
 ```
 
-**Root cause checklist:**
-- [ ] Drift window too small relative to natural data variance?
-- [ ] Cyclical pattern in data (e.g., time-of-day effects)?
-- [ ] Sensitivity threshold too tight?
-- [ ] Multiple data sources with different distributions feeding same topic?
-- [ ] Baseline was set during anomalous period?
-
-### Resolution
-
-**Immediate (< 5 min):**
-1. Suppress drift alerts temporarily:
-   ```bash
-   curl -X POST http://detector:8080/drift/suppress --data '{"duration_minutes": 30}'
-   ```
-2. Increase drift detection cooldown:
-   ```bash
-   curl -X POST http://detector:8080/config \
-     -d '{"drift_cooldown_seconds": 300}'  # don't re-alert within 5 min
-   ```
-
-**Short-term (< 1 hour):**
-1. Increase drift window size to smooth out variance:
-   ```bash
-   curl -X POST http://detector:8080/config \
-     -d '{"drift_window": 1000}'  # default 200
-   ```
-2. Raise drift sensitivity threshold:
-   ```bash
-   curl -X POST http://detector:8080/config \
-     -d '{"drift_threshold": 3.0}'  # default 2.0
-   ```
-3. Force reset baseline from known-good period:
-   ```bash
-   curl -X POST http://detector:8080/drift/reset-baseline \
-     -d '{"source": "last_known_good", "timestamp": "2026-08-27T00:00:00Z"}'
-   ```
-
-**Long-term:**
-- Implement hysteresis: require N consecutive windows above threshold before alerting
-- Use CUSUM or Page-Hinkley test instead of simple z-score comparison
-- Segment drift detection by data source/label class
-- Add time-of-day and day-of-week seasonality modeling
-
-### Escalation
-- If drift is real (confirmed distribution shift): investigate upstream data pipeline
-- If auto-tuning made bad threshold changes: disable auto-tuning, notify the ML owner
-
----
-
-## 4. Quarantine Storage Filling Up
-
-### Symptoms
-- Disk usage alert on quarantine volume (> 80% capacity)
-- SQLite write errors in detector logs: `database or disk is full`
-- New flagged samples being dropped silently
-- Metrics show `quarantine_store_errors` incrementing
-
-### Impact
-- Flagged samples lost — cannot review or analyze poison attempts
-- Detector may crash or degrade if writes fail unhandled
-- Compliance risk: audit trail interrupted
-
-### Diagnosis
+If the container is stopped or crash-looping, inspect the logs before restarting:
 
 ```bash
-# Check quarantine database size
-ls -lh /var/lib/detector/quarantine.db
-du -sh /var/lib/detector/
-
-# Check total quarantined count and unreviewed backlog
-sqlite3 /var/lib/detector/quarantine.db \
-  "SELECT COUNT(*), SUM(CASE WHEN reviewed=0 THEN 1 ELSE 0 END) FROM quarantine;"
-
-# Check disk space
-df -h /var/lib/detector/
-
-# Check quarantine growth rate (last 24h)
-sqlite3 /var/lib/detector/quarantine.db \
-  "SELECT COUNT(*) FROM quarantine WHERE quarantined_at > unixepoch() - 86400;"
+docker compose restart api
+docker compose logs --since=5m api
 ```
 
-**Root cause checklist:**
-- [ ] High false positive rate filling storage with clean samples? (→ Scenario 1)
-- [ ] Reviewed samples not being purged?
-- [ ] Retention policy not configured or cron not running?
-- [ ] Storage volume undersized for current ingestion rate?
-- [ ] Actual poison campaign generating large volume of real alerts?
+Do not treat a successful `/health` response as proof that scoring is ready.
 
-### Resolution
+## 2. Readiness fails
 
-**Immediate (< 5 min):**
-1. Purge already-reviewed samples:
-   ```bash
-   sqlite3 /var/lib/detector/quarantine.db \
-     "DELETE FROM quarantine WHERE reviewed = 1;"
-   sqlite3 /var/lib/detector/quarantine.db "VACUUM;"
-   ```
-2. If disk critically full, archive old entries:
-   ```bash
-   # Export entries older than 7 days
-   sqlite3 /var/lib/detector/quarantine.db \
-     ".mode json" \
-     "SELECT * FROM quarantine WHERE quarantined_at < unixepoch() - 604800;" \
-     > /backup/quarantine_archive_$(date +%Y%m%d).json
-   
-   # Delete archived entries
-   sqlite3 /var/lib/detector/quarantine.db \
-     "DELETE FROM quarantine WHERE quarantined_at < unixepoch() - 604800;"
-   sqlite3 /var/lib/detector/quarantine.db "VACUUM;"
-   ```
+Readiness depends on a known-clean startup baseline. Check:
 
-**Short-term (< 1 hour):**
-1. Enable automatic retention policy:
-   ```bash
-   curl -X POST http://detector:8080/config \
-     -d '{"quarantine_retention_days": 30, "auto_purge_reviewed": true}'
-   ```
-2. Expand volume if on Kubernetes:
-   ```bash
-   kubectl patch pvc quarantine-storage -p '{"spec":{"resources":{"requests":{"storage":"50Gi"}}}}'
-   ```
-3. If caused by FP spike: address root cause per Scenario 1 first.
-
-**Long-term:**
-- Implement tiered storage: hot (SQLite) → warm (S3/object store)
-- Set up automated archival cron job
-- Configure disk usage alerting at 60% (warning) and 80% (critical)
-- Size storage based on: `ingestion_rate × FP_rate × retention_days × avg_sample_size`
-- Consider storing only metadata + sample ID in SQLite, with full sample data in object storage
-
-### Escalation
-- If disk is 95%+ full and growing: treat as urgent and notify the deployment owner immediately
-- If large volume is from real poison campaign: escalate to security team
-- If data loss occurred (writes failed): document gap in audit log and notify compliance
-
----
-
-## General Operator Notes
-
-> These are notes for whoever operates a deployment. This project does not
-> provide an on-call rotation.
-
-### Quick Health Check
 ```bash
-# All-in-one status
-curl http://detector:8080/health | jq .
-
-# Expected output:
-# {
-#   "status": "healthy",
-#   "kafka_connected": true,
-#   "redis_connected": true,
-#   "quarantine_db_ok": true,
-#   "consumer_lag": 42,
-#   "uptime_seconds": 86400
-# }
+curl -i http://127.0.0.1:8000/ready
 ```
 
-### Key Metrics to Monitor
-| Metric | Warning | Critical |
-|--------|---------|----------|
-| Consumer lag | > 10,000 | > 100,000 |
-| FP rate | > 10% | > 30% |
-| Quarantine disk | > 60% | > 80% |
-| Detection latency P99 | > 100ms | > 500ms |
-| Drift alert frequency | > 3/hour | > 10/hour |
+If readiness reports a baseline problem, configure `POISON_BASELINE_PATH` to an immutable NPZ artifact containing a numeric 2D array named `features`. The service rejects pickled object arrays and invalid/non-finite baselines.
 
-### Contacts
+After changing the baseline configuration, rebuild/restart the API and re-check `/ready`.
 
-> Placeholders — fill in for your own environment. No such channels or
-> PagerDuty escalation policy are operated by this project.
+## 3. Protected requests return 401/503/429
 
-- ML Platform Team: (your Slack channel)
-- Data Platform: (your Slack channel)
-- Security: (your Slack channel / your own PagerDuty escalation policy)
+Verify the local key is set in your shell and matches the key supplied to Compose:
 
-### Post-Incident
-1. Update this runbook if a new scenario was encountered
-2. File post-mortem within 48 hours for any Sev1/Sev2 incident
-3. Track action items in the incident tracker
+```bash
+export API_KEY="<your-own-strong-api-key>"
+curl -i -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/stats
+```
+
+A 401 means the key is absent or invalid. In production mode, an insecurely short key causes the service to fail closed. A 429 means the configured rate limit was exceeded.
+
+Check metrics with authentication:
+
+```bash
+curl -fsS -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/metrics
+```
+
+Do not place API keys in command history, screenshots, tickets, or committed files in a real deployment; prefer your environment/secret manager.
+
+## 4. Scoring looks abnormal or drift is reported
+
+Inspect detector state:
+
+```bash
+curl -fsS -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/stats
+```
+
+The current API does not implement a remote threshold-change or drift-reset endpoint. If tuning is required, change the checked-in/configured detector settings through the supported configuration path, review the change, run tests, and restart the service. Do not use undocumented `POST /config` or `/drift/*` commands.
+
+For a controlled smoke test after `/ready` succeeds:
+
+```bash
+curl -fsS -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  http://127.0.0.1:8000/score \
+  -d '{"features":[0.1,0.2,0.3],"source":"runbook-smoke-test"}'
+```
+
+Use a feature vector compatible with the configured baseline dimension.
+
+## 5. Redis or demo dependencies fail
+
+The checked-in Compose stack includes Redis, Kafka, Prometheus, and Grafana for local evaluation. Check container state first:
+
+```bash
+docker compose ps
+docker compose logs --since=10m redis
+docker compose logs --since=10m kafka
+docker compose logs --since=10m prometheus
+docker compose logs --since=10m grafana
+```
+
+For Redis connectivity from the host:
+
+```bash
+redis-cli -h 127.0.0.1 -p 6379 ping
+```
+
+The current FastAPI service does not expose Kafka consumer-lag, quarantine-database, alert-pause, or retention-management endpoints. Any such operational procedures must be added only when corresponding implementation exists.
+
+## Recovery validation
+
+After any change or restart:
+
+```bash
+curl -fsS http://127.0.0.1:8000/health
+curl -i http://127.0.0.1:8000/ready
+curl -fsS -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/stats
+```
+
+Then run the repository test suite before promoting a code/configuration change:
+
+```bash
+python -m pytest tests -q
+```
+
+Document the exact commit, configuration change, observed error, and validation evidence for any real incident.
