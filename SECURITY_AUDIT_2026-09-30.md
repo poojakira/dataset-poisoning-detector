@@ -26,3 +26,13 @@ FastAPI scoring/batch API, authenticated WebSocket stream, Redis production rate
 
 ## Not applicable
 Password reset and browser XSS unless a user-account web UI is introduced.
+
+<!-- repo-verification:start -->
+## Verification update — 2026-09-30
+
+- **Scope:** Account-wide `poojakira` repository pass covering source/configuration, CI/release workflows, security-hygiene gates, dependency/SAST controls, and documentation consistency.
+- **Remediation:** Pinned the PyPI publish action to an immutable commit and rechecked the repository security posture without weakening API-key, rate-limit, or validation controls.
+- **Verification state:** The latest completed core CI, Production Gate, Security Hygiene, and Documentation Integrity checks were green before the release-workflow pin; the pin itself is repository-only hardening.
+- **Security note:** Production rate limiting and authentication remain fail-closed as documented; no synthetic benchmark result is presented as production efficacy.
+- **Evidence boundary:** This update records repository and GitHub Actions evidence observed during the pass. It is not a claim of independent penetration testing, production deployment, or zero residual risk.
+<!-- repo-verification:end -->
