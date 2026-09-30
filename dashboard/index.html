@@ -313,62 +313,91 @@
         document.getElementById("flip-rate").textContent = (data.dataset.flip_rate * 100) + "%";
         document.getElementById("seed").textContent = data.dataset.seed;
 
-        // Per-Class Stats
+        // Per-Class Stats — construct DOM nodes so evidence values are never interpreted as HTML.
         const perClassEl = document.getElementById("per-class-stats");
-        let perClassHTML = "";
+        perClassEl.replaceChildren();
+        const metricRow = (label, value, warn = false) => {
+            const row = document.createElement("div");
+            row.className = "metric-row";
+            const labelEl = document.createElement("span");
+            labelEl.className = "metric-label";
+            labelEl.textContent = label;
+            const valueEl = document.createElement("span");
+            valueEl.className = "metric-value" + (warn ? " warn" : "");
+            valueEl.textContent = String(value);
+            row.append(labelEl, valueEl);
+            return row;
+        };
         for (const [classLabel, stats] of Object.entries(data.per_class)) {
-            perClassHTML += `
-                <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #21262d;">
-                    <div style="font-weight:600;color:#58a6ff;margin-bottom:6px;">Class ${classLabel}</div>
-                    <div class="metric-row">
-                        <span class="metric-label">Samples</span>
-                        <span class="metric-value">${stats.size}</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Flagged</span>
-                        <span class="metric-value warn">${stats.flagged}</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Threshold</span>
-                        <span class="metric-value">${stats.threshold.toFixed(4)}</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Mean Score</span>
-                        <span class="metric-value">${stats.mean_score.toFixed(4)}</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Max Score</span>
-                        <span class="metric-value">${stats.max_score.toFixed(4)}</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Explained Var Ratio</span>
-                        <span class="metric-value">${stats.explained_variance_ratio.toFixed(4)}</span>
-                    </div>
-                </div>`;
+            const card = document.createElement("div");
+            card.style.marginBottom = "12px";
+            card.style.paddingBottom = "12px";
+            card.style.borderBottom = "1px solid #21262d";
+            const title = document.createElement("div");
+            title.style.fontWeight = "600";
+            title.style.color = "#58a6ff";
+            title.style.marginBottom = "6px";
+            title.textContent = "Class " + String(classLabel);
+            card.append(
+                title,
+                metricRow("Samples", stats.size),
+                metricRow("Flagged", stats.flagged, true),
+                metricRow("Threshold", Number(stats.threshold).toFixed(4)),
+                metricRow("Mean Score", Number(stats.mean_score).toFixed(4)),
+                metricRow("Max Score", Number(stats.max_score).toFixed(4)),
+                metricRow("Explained Var Ratio", Number(stats.explained_variance_ratio).toFixed(4))
+            );
+            perClassEl.appendChild(card);
         }
-        perClassEl.innerHTML = perClassHTML;
 
-        // Triage Table
+        // Triage Table — all evidence-derived values use textContent.
         const tbody = document.getElementById("triage-table");
-        tbody.innerHTML = data.top_flagged_samples.map(s => {
-            const maxScore = data.top_flagged_samples[0].projection_score;
-            const barWidth = Math.round((s.projection_score / maxScore) * 100);
+        tbody.replaceChildren();
+        const flagged = Array.isArray(data.top_flagged_samples) ? data.top_flagged_samples : [];
+        const maxScore = flagged.length ? Number(flagged[0].projection_score) || 1 : 1;
+        flagged.forEach(s => {
+            const barWidth = Math.max(0, Math.min(100, Math.round((Number(s.projection_score) / maxScore) * 100)));
             const barColor = s.is_poisoned ? "#f85149" : "#8b949e";
-            const poisonedBadge = s.actually_poisoned
-                ? '<span class="status-badge status-degraded">TRUE POISON</span>'
-                : '<span class="status-badge status-inactive">CLEAN</span>';
-            return `<tr>
-                <td style="font-family:monospace;color:#58a6ff">${s.sample_idx}</td>
-                <td>
-                    <span class="score-bar-bg"><span class="score-bar-fill" style="width:${barWidth}%;background:${barColor}"></span></span>
-                    <span style="color:${barColor}">${s.projection_score.toFixed(4)}</span>
-                </td>
-                <td style="color:#8b949e">${s.threshold.toFixed(4)}</td>
-                <td>${s.label}</td>
-                <td>${poisonedBadge}</td>
-                <td style="color:#8b949e">#${s.rank_in_class}</td>
-            </tr>`;
-        }).join("");
+            const row = document.createElement("tr");
+
+            const idx = document.createElement("td");
+            idx.style.fontFamily = "monospace";
+            idx.style.color = "#58a6ff";
+            idx.textContent = String(s.sample_idx);
+
+            const scoreCell = document.createElement("td");
+            const barBg = document.createElement("span");
+            barBg.className = "score-bar-bg";
+            const barFill = document.createElement("span");
+            barFill.className = "score-bar-fill";
+            barFill.style.width = barWidth + "%";
+            barFill.style.background = barColor;
+            barBg.appendChild(barFill);
+            const score = document.createElement("span");
+            score.style.color = barColor;
+            score.textContent = Number(s.projection_score).toFixed(4);
+            scoreCell.append(barBg, score);
+
+            const threshold = document.createElement("td");
+            threshold.style.color = "#8b949e";
+            threshold.textContent = Number(s.threshold).toFixed(4);
+
+            const label = document.createElement("td");
+            label.textContent = String(s.label);
+
+            const poison = document.createElement("td");
+            const badge = document.createElement("span");
+            badge.className = "status-badge " + (s.actually_poisoned ? "status-degraded" : "status-inactive");
+            badge.textContent = s.actually_poisoned ? "TRUE POISON" : "CLEAN";
+            poison.appendChild(badge);
+
+            const rank = document.createElement("td");
+            rank.style.color = "#8b949e";
+            rank.textContent = "#" + String(s.rank_in_class);
+
+            row.append(idx, scoreCell, threshold, label, poison, rank);
+            tbody.appendChild(row);
+        });
 
         // Timestamps
         document.getElementById("data-source").textContent =
