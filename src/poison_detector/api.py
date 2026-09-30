@@ -301,10 +301,19 @@ _MIN_BASELINE_SAMPLES = int(os.environ.get("POISON_MIN_BASELINE_SAMPLES", "50"))
 _BASELINE_PATH = os.environ.get("POISON_BASELINE_PATH", "")
 _SCORE_TIMEOUT_SECONDS = float(os.environ.get("POISON_SCORE_TIMEOUT_SECONDS", "30"))
 _MAX_INFLIGHT_SCORING = int(os.environ.get("POISON_MAX_INFLIGHT_SCORING", "16"))
+_MAX_WS_CONNECTIONS = int(os.environ.get("POISON_MAX_WS_CONNECTIONS", "64"))
+_MAX_WS_MESSAGES_PER_MINUTE = int(os.environ.get("POISON_MAX_WS_MESSAGES_PER_MINUTE", "60"))
+_MAX_WS_MESSAGE_BYTES = int(os.environ.get("POISON_MAX_WS_MESSAGE_BYTES", "4096"))
 if _SCORE_TIMEOUT_SECONDS <= 0:
     raise RuntimeError("POISON_SCORE_TIMEOUT_SECONDS must be positive")
 if _MAX_INFLIGHT_SCORING < 1 or _MAX_INFLIGHT_SCORING > 128:
     raise RuntimeError("POISON_MAX_INFLIGHT_SCORING must be between 1 and 128")
+if _MAX_WS_CONNECTIONS < 1 or _MAX_WS_CONNECTIONS > 1024:
+    raise RuntimeError("POISON_MAX_WS_CONNECTIONS must be between 1 and 1024")
+if _MAX_WS_MESSAGES_PER_MINUTE < 1 or _MAX_WS_MESSAGES_PER_MINUTE > 10000:
+    raise RuntimeError("POISON_MAX_WS_MESSAGES_PER_MINUTE must be between 1 and 10000")
+if _MAX_WS_MESSAGE_BYTES < 64 or _MAX_WS_MESSAGE_BYTES > 65536:
+    raise RuntimeError("POISON_MAX_WS_MESSAGE_BYTES must be between 64 and 65536")
 if _ENVIRONMENT == "production":
     if not _RATE_LIMIT_REDIS_URL:
         raise RuntimeError("POISON_REDIS_URL is required in production")
@@ -721,12 +730,26 @@ async def websocket_stream(websocket: WebSocket) -> None:
     if not _is_valid_api_key(websocket.headers.get("X-API-Key", "")):
         await websocket.close(code=1008, reason="Unauthorized")
         return
+    if _ws_manager.connection_count >= _MAX_WS_CONNECTIONS:
+        await websocket.close(code=1013, reason="Server busy")
+        return
 
     await _ws_manager.connect(websocket)
+    message_times: list[float] = []
     try:
         while True:
             message = await websocket.receive_text()
-            await websocket.send_json({"event": "ack", "data": message})
+            if len(message.encode("utf-8")) > _MAX_WS_MESSAGE_BYTES:
+                await websocket.close(code=1009, reason="Message too large")
+                return
+            now = time.time()
+            cutoff = now - 60.0
+            message_times[:] = [ts for ts in message_times if ts > cutoff]
+            if len(message_times) >= _MAX_WS_MESSAGES_PER_MINUTE:
+                await websocket.close(code=1008, reason="Rate limit exceeded")
+                return
+            message_times.append(now)
+            await websocket.send_json({"event": "ack"})
     except WebSocketDisconnect:
         pass
     finally:
