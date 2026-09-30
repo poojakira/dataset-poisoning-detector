@@ -1,31 +1,16 @@
-# Verified Metrics — Poster 04
+# Verified Metrics - Poster 04
 
-> Evidence status: This is a dated repository snapshot at the commit identified below. `VERIFIED_AT_SNAPSHOT` means verified for that commit and environment; it does not assert the same result on the latest `main`. Compare newer claims with the repository evidence before reuse.
+**Code snapshot:** `ed38ad039a60a648c38a247e4136b34bbe287bda`  
+**CI run:** https://github.com/poojakira/dataset-poisoning-detector/actions/runs/36783091096
 
-MIT • Python 3.12 • HEAD 0688274 • verified 2026-09-26. Verified for this poster on Windows / CPython 3.12.10.
+| Metric | Current value |
+|---|---:|
+| Tests passed | **162** |
+| Statement coverage | **70.77%** |
+| Cross-class F1 @ 5% poison | **0.55** |
+| Cross-class F1 @ 10% poison | **0.595** |
+| Cross-class F1 @ 20% poison | **0.6975** |
+| Old top-1 spectral F1 | **0.08 / 0.23 / 0.3675** |
+| Feature-space ensemble F1 | **0.0841 / 0.1421 / 0.2331** |
 
-## Headline cards
-- 0.70 — BEST F1 (cross-class)
-- 0.55 — F1 @5% poison
-Notes: Label-flip benchmark, seed 2018, 2000×100 synthetic. Cross-class centroid detector; top-1 baseline kept for honesty.
-
-## Verified surface
-| Item | Value |
-|---|---|
-| @ 5% poison | 0.55 |
-| @ 10% poison | 0.60 |
-| @ 20% poison | 0.70 |
-
-## Chart values
-| Series | Value |
-|---|---|
-| Cross-class F1 (x100) | 70 |
-| Top-1 baseline (x100) | 37 |
-| Ensemble (x100) | 23 |
-Note: Cross-class centroid beats top-1 spectral and the feature-space ensemble on 3/3 rates. spectral_benchmark.json.
-
-## Historical / provenance
-results/spectral_benchmark.json (committed). Tran et al. 2018 setup. Top-1 baseline (0.08/0.23/0.37) retained in the JSON for transparent comparison.
-
-## Not established by this repository
-High recall on label-flip attacks. Detection of subtle clean-label / image backdoors. Robustness guarantee.
+The efficacy values are from the committed synthetic label-flip benchmark, not production data.

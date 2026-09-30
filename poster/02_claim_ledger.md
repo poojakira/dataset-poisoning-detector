@@ -1,18 +1,15 @@
-# Claim Ledger — Poster 04 (04-dataset-poisoning-detector)
+# Claim Ledger - Poster 04
 
-> Evidence status: This is a dated repository snapshot at the commit identified below. `VERIFIED_AT_SNAPSHOT` means verified for that commit and environment; it does not assert the same result on the latest `main`. Compare newer claims with the repository evidence before reuse.
-
-MIT • Python 3.12 • HEAD 0688274 • verified 2026-09-26. Classification: VERIFIED_AT_SNAPSHOT / VERIFIED_HISTORICAL / PARTIAL / UNVERIFIED / UNSUPPORTED.
+> Verified code snapshot: `ed38ad039a60a648c38a247e4136b34bbe287bda`; successful CI run `36783091096`, 2026-09-30.
 
 | # | Claim | Classification | Evidence |
 |---|---|---|---|
-| 1 | Spectral label-flip F1 = 0.08 / 0.23 / 0.37 at 5/10/20% poison | VERIFIED_AT_SNAPSHOT | results/spectral_benchmark.json (committed), read directly. Negative result shown prominently. |
-| 2 | Spectral beats ensemble on 2/3 contamination rates | VERIFIED_AT_SNAPSHOT | spectral_benchmark.json comparison block; both remain weak on label-flip. |
-| 3 | 4 methods: z-score, IQR, IsolationForest, spectral; majority vote >=2/3 | VERIFIED_AT_SNAPSHOT | README architecture + module table. |
-| 4 | Streaming throughput | PARTIAL | BENCHMARK_METADATA.md: environment-scoped microbenchmark; prior '~12,400/s' note demoted to historical (no SHA). Not shown as current. |
-| 5 | High recall on label-flip / clean-label detection | UNSUPPORTED (disclaimed) | README + benchmark explicitly document these as failure modes. |
+| 1 | 162 tests pass | VERIFIED_AT_SNAPSHOT | Current-main Python 3.12 CI. |
+| 2 | 70.77% statement coverage | VERIFIED_AT_SNAPSHOT | Current-main Python 3.12 CI. |
+| 3 | Cross-class centroid F1 = 0.55 / 0.595 / 0.6975 at 5% / 10% / 20% poison | VERIFIED_AT_SNAPSHOT | `results/spectral_benchmark.json`. |
+| 4 | Old top-1 spectral baseline = 0.08 / 0.23 / 0.3675 | VERIFIED_AT_SNAPSHOT | Same committed benchmark artifact. |
+| 5 | Cross-class spectral beats feature-space ensemble on 3/3 tested rates | VERIFIED_AT_SNAPSHOT | Benchmark comparison block; ensemble F1 0.0841 / 0.1421 / 0.2331. |
+| 6 | Streaming throughput as a fixed product number | UNSUPPORTED | Hardware-scoped microbenchmark only; no fixed SLA is published. |
+| 7 | High recall for clean-label/subtle backdoor attacks | UNSUPPORTED | Explicit repository limitation. |
 
-## Policy applied
-- Only VERIFIED_AT_SNAPSHOT figures appear as prominent current results.
-- Historical/projected values are labeled (dashed box / explicit note).
-- Unsupported production/accuracy claims are omitted or shown in the red "NOT ESTABLISHED" box.
+Synthetic benchmark results must not be restated as real-pipeline efficacy.
