@@ -46,7 +46,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -59,7 +58,7 @@ from sklearn.metrics import precision_score, recall_score, f1_score
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
-from poison_detector.spectral import spectral_detect, detect_label_flips, detect_label_flips_crossclass
+from poison_detector.spectral import detect_label_flips, detect_label_flips_crossclass
 from poison_detector.detector import detect
 
 

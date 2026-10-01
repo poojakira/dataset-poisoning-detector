@@ -259,10 +259,10 @@ class StreamingDetector:
         # --- Z-score based detection ---
         zscore_anomaly = False
         if self._welford is not None and self._welford.count >= 10:
-            std = self._welford.std
+            feature_std = self._welford.std
             mean = self._welford.mean
             # Avoid division by zero for constant features
-            safe_std = np.where(std > 1e-10, std, 1.0)
+            safe_std = np.where(feature_std > 1e-10, feature_std, 1.0)
             z_scores = np.abs((sample_arr - mean) / safe_std)
             max_z = float(np.max(z_scores))
             zscore_score = min(max_z / (self.zscore_threshold * 2), 1.0)

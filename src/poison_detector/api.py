@@ -402,13 +402,14 @@ class BodySizeLimitMiddleware:
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
-            return await self.app(scope, receive, send)
+            await self.app(scope, receive, send)
+            return
         chunks = []
         total = 0
         while True:
             message = await receive()
             if message["type"] == "http.disconnect":
-                return None
+                return
             chunk = message.get("body", b"")
             total += len(chunk)
             if total > _MAX_REQUEST_BYTES:

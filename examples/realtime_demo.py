@@ -17,20 +17,14 @@ Requirements:
     pip install -e ".[realtime]"
 """
 
-import time
 import random
-import sys
+import time
 
 import numpy as np
 
 from poison_detector.stream import StreamingDetector
 from poison_detector.drift import ConceptDriftDetector
 from poison_detector.fingerprint import SampleFingerprinter
-from poison_detector.metrics import (
-    SAMPLES_PROCESSED,
-    SAMPLES_POISONED,
-    SCORING_LATENCY,
-)
 
 
 def generate_clean_sample(n_features: int = 10) -> list[float]:
