@@ -131,7 +131,7 @@ class QuarantineStore(ABC):
         Returns:
             Unique sample_id for the quarantine entry.
         """
-        ...
+        raise NotImplementedError
 
     @abstractmethod
     def get_sample(self, sample_id: str) -> QuarantinedSample | None:
@@ -143,7 +143,7 @@ class QuarantineStore(ABC):
         Returns:
             QuarantinedSample if found, None otherwise.
         """
-        ...
+        raise NotImplementedError
 
     @abstractmethod
     def get_pending_reviews(self, limit: int = 100) -> list[QuarantinedSample]:
@@ -155,7 +155,7 @@ class QuarantineStore(ABC):
         Returns:
             List of QuarantinedSample with PENDING status.
         """
-        ...
+        raise NotImplementedError
 
     @abstractmethod
     def resolve(
@@ -176,7 +176,7 @@ class QuarantineStore(ABC):
         Returns:
             True if the sample was found and updated, False otherwise.
         """
-        ...
+        raise NotImplementedError
 
     @abstractmethod
     def get_stats(self) -> QuarantineStats:
@@ -185,7 +185,7 @@ class QuarantineStore(ABC):
         Returns:
             QuarantineStats with counts and oldest pending timestamp.
         """
-        ...
+        raise NotImplementedError
 
 
 class SQLiteStore(QuarantineStore):

@@ -41,7 +41,6 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any
 
 import numpy as np
 from sklearn.ensemble import IsolationForest
@@ -259,7 +258,6 @@ class StreamingDetector:
 
         # --- Z-score based detection ---
         zscore_anomaly = False
-        zscore_score = 0.0
         if self._welford is not None and self._welford.count >= 10:
             std = self._welford.std
             mean = self._welford.mean
