@@ -153,7 +153,6 @@ def build_labelflip_groups(
     Sampling is disjoint across classes to avoid reusing the same rows.
     """
     rng = np.random.default_rng(seed)
-    d = feats.shape[1]
     by_class = {c: np.where(y == c)[0] for c in range(NUM_CLASSES)}
     for c in range(NUM_CLASSES):
         rng.shuffle(by_class[c])
