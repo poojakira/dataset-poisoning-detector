@@ -230,12 +230,12 @@ class PipelineConsumer(ABC):
         Raises:
             ConnectionError: If the connection cannot be established.
         """
-        ...
+        raise NotImplementedError
 
     @abstractmethod
     async def disconnect(self) -> None:
         """Disconnect from the message queue gracefully."""
-        ...
+        raise NotImplementedError
 
     @abstractmethod
     async def consume(
@@ -251,7 +251,7 @@ class PipelineConsumer(ABC):
             handler: Async function that processes each message.
             batch_size: Number of messages to fetch per iteration.
         """
-        ...
+        raise NotImplementedError
 
     @abstractmethod
     async def acknowledge(self, message_id: str) -> None:
@@ -260,7 +260,7 @@ class PipelineConsumer(ABC):
         Args:
             message_id: The message to acknowledge.
         """
-        ...
+        raise NotImplementedError
 
     @abstractmethod
     async def dead_letter(self, message: PipelineMessage, error: str) -> None:
@@ -270,7 +270,7 @@ class PipelineConsumer(ABC):
             message: The message that failed processing.
             error: Description of the failure.
         """
-        ...
+        raise NotImplementedError
 
     @abstractmethod
     async def quarantine(self, message: PipelineMessage, score: float) -> None:
@@ -280,7 +280,7 @@ class PipelineConsumer(ABC):
             message: The message flagged as potentially poisoned.
             score: The anomaly score that triggered quarantine.
         """
-        ...
+        raise NotImplementedError
 
     def stop(self) -> None:
         """Signal the consumer to stop consuming."""

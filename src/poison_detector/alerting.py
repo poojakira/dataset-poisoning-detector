@@ -38,7 +38,6 @@ Security Notes:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import time
@@ -126,7 +125,7 @@ class AlertChannel(Protocol):
         Returns:
             True if delivery succeeded, False otherwise.
         """
-        ...
+        raise NotImplementedError
 
 
 class SlackChannel:

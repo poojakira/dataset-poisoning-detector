@@ -51,7 +51,6 @@ import time
 import threading
 from pathlib import Path
 from collections import defaultdict
-from dataclasses import asdict
 from typing import Any
 
 import numpy as np
@@ -403,7 +402,8 @@ class BodySizeLimitMiddleware:
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
-            return await self.app(scope, receive, send)
+            await self.app(scope, receive, send)
+            return
         chunks = []
         total = 0
         while True:
@@ -844,6 +844,6 @@ async def websocket_stream(websocket: WebSocket) -> None:
             message_times.append(now)
             await websocket.send_json({"event": "ack"})
     except WebSocketDisconnect:
-        pass
+        return
     finally:
         _ws_manager.disconnect(websocket)
