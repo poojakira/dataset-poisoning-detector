@@ -101,7 +101,7 @@ class PoisonDetectionConsumer:
             drift_sensitivity=self.config.drift_sensitivity,
         )
         self.drift_detector = ConceptDriftDetector(
-            sensitivity=self.config.drift_sensitivity,
+            delta=self.config.drift_sensitivity,
         )
         self.fingerprinter = SampleFingerprinter(similarity_threshold=0.95)
 

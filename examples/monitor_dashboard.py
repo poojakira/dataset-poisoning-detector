@@ -23,9 +23,6 @@ import argparse
 import sys
 import time
 
-from poison_detector.stream import StreamingDetector
-from poison_detector.drift import ConceptDriftDetector
-from poison_detector.fingerprint import SampleFingerprinter
 from poison_detector.metrics import (
     SAMPLES_PROCESSED,
     SAMPLES_POISONED,

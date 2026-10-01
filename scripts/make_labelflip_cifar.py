@@ -159,7 +159,6 @@ def build_labelflip_groups(
 
     # cursors to hand out disjoint indices per class as clean members
     clean_cursor = {c: 0 for c in range(NUM_CLASSES)}
-    used = set()
 
     groups = {}
     # number of poison per class so that poison/(clean+poison) ~= flip_rate
