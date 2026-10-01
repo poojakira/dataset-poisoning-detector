@@ -308,6 +308,7 @@ _ws_manager = ConnectionManager()
 
 _ENVIRONMENT = os.environ.get("POISON_ENVIRONMENT", "development").strip().lower()
 _RATE_LIMIT_RPM = int(os.environ.get("POISON_RATE_LIMIT_RPM", "100"))
+_RATE_KEY_SECRET = os.urandom(32)
 _RATE_LIMIT_REDIS_URL = os.environ.get("POISON_REDIS_URL", "").strip()
 _MAX_REQUEST_BYTES = int(os.environ.get("POISON_MAX_REQUEST_BYTES", str(2 * 1024 * 1024)))
 _MIN_BASELINE_SAMPLES = int(os.environ.get("POISON_MIN_BASELINE_SAMPLES", "50"))
@@ -532,7 +533,7 @@ async def rate_limit_middleware(request: Request, call_next: Any) -> Any:
         if _is_valid_api_key(supplied_key)
         else (request.client.host if request.client else "anonymous")
     )
-    identity = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:24]
+    identity = hmac.new(_RATE_KEY_SECRET, api_key.encode("utf-8"), hashlib.sha256).hexdigest()[:24]
     try:
         allowed = _rate_limiter.is_allowed(identity)
     except Exception:

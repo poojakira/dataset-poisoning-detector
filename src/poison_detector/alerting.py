@@ -47,8 +47,19 @@ from enum import Enum
 from typing import Any, Protocol
 from urllib.request import Request, urlopen
 from urllib.error import URLError
+from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_http_url(url: str) -> str:
+    """Require an absolute HTTP(S) URL without embedded credentials."""
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("alert destination must be an absolute HTTP(S) URL")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("alert destination must not contain URL credentials")
+    return url
 
 
 class AlertSeverity(Enum):
@@ -132,7 +143,7 @@ class SlackChannel:
             webhook_url: Slack Incoming Webhook URL.
             channel: Override channel (empty uses webhook default).
         """
-        self._webhook_url = webhook_url
+        self._webhook_url = _validate_http_url(webhook_url)
         self._channel = channel
 
     def send(self, alert: Alert) -> bool:
@@ -314,7 +325,7 @@ class WebhookChannel:
             url: Webhook endpoint URL.
             headers: Additional HTTP headers (e.g., Authorization).
         """
-        self._url = url
+        self._url = _validate_http_url(url)
         self._headers = headers or {}
 
     def send(self, alert: Alert) -> bool:
@@ -343,7 +354,7 @@ class WebhookChannel:
             with urlopen(req, timeout=10) as resp:
                 return 200 <= resp.status < 300
         except (URLError, OSError, ValueError) as e:
-            logger.warning(f"Webhook delivery failed to {self._url}: {e}")
+            logger.warning(f"Webhook delivery failed: {e}")
             return False
 
 

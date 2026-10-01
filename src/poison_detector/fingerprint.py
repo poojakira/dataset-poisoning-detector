@@ -117,8 +117,8 @@ class BloomFilter:
 
     def _get_bit_positions(self, item_bytes: bytes) -> list[int]:
         """Compute hash positions for an item using double hashing."""
-        h1 = int(hashlib.md5(item_bytes).hexdigest(), 16)
-        h2 = int(hashlib.sha1(item_bytes).hexdigest(), 16)
+        h1 = int(hashlib.md5(item_bytes, usedforsecurity=False).hexdigest(), 16)
+        h2 = int(hashlib.sha1(item_bytes, usedforsecurity=False).hexdigest(), 16)
 
         positions = []
         for i in range(self._num_hashes):

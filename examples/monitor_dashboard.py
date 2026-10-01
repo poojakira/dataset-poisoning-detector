@@ -20,7 +20,6 @@ included in docker-compose.yml.
 """
 
 import argparse
-import os
 import sys
 import time
 
@@ -38,8 +37,9 @@ from poison_detector.metrics import (
 
 
 def clear_screen() -> None:
-    """Clear terminal screen cross-platform."""
-    os.system("cls" if os.name == "nt" else "clear")
+    """Clear the terminal without invoking a command shell."""
+    sys.stdout.write("\033[2J\033[H")
+    sys.stdout.flush()
 
 
 def format_duration(seconds: float) -> str:
