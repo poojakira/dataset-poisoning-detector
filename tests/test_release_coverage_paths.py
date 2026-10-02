@@ -11,12 +11,7 @@ import pytest
 from fastapi import HTTPException
 
 import poison_detector.api as api
-from poison_detector.pipeline import (
-    KafkaConsumer,
-    PipelineMessage,
-    ProcessingResult,
-    RedisConsumer,
-)
+from poison_detector.pipeline import KafkaConsumer, PipelineMessage, ProcessingResult, RedisConsumer
 
 
 @pytest.mark.asyncio
@@ -50,9 +45,7 @@ async def test_redis_consume_routes_all_outcomes_and_malformed():
             )
         if message.message_id == "3-0":
             consumer.stop()
-            return ProcessingResult(
-                message.message_id, dead_lettered=True, error="rejected"
-            )
+            return ProcessingResult(message.message_id, dead_lettered=True, error="rejected")
         raise AssertionError("unexpected")
 
     await consumer.consume(handler)
@@ -65,9 +58,7 @@ async def test_redis_consume_routes_all_outcomes_and_malformed():
 
 
 @pytest.mark.asyncio
-async def test_redis_consume_empty_updates_backpressure_and_handler_exception(
-    monkeypatch,
-):
+async def test_redis_consume_empty_updates_backpressure_and_handler_exception(monkeypatch):
     consumer = RedisConsumer(backpressure_threshold=2, backpressure_recovery=1)
     client = SimpleNamespace(
         xreadgroup=AsyncMock(),
@@ -108,11 +99,14 @@ async def test_redis_connect_busygroup_disconnect_and_real_error(monkeypatch):
         aclose=AsyncMock(),
     )
     redis_async = types.ModuleType("redis.asyncio")
-    cast(Any, redis_async).from_url = lambda *a, **k: fake_client
+    redis_async_dynamic = cast(Any, redis_async)
+    redis_async_dynamic.from_url = lambda *a, **k: fake_client
     redis_exc = types.ModuleType("redis.exceptions")
-    cast(Any, redis_exc).ResponseError = ResponseError
+    redis_exc_dynamic = cast(Any, redis_exc)
+    redis_exc_dynamic.ResponseError = ResponseError
     redis_pkg = types.ModuleType("redis")
-    cast(Any, redis_pkg).asyncio = redis_async
+    redis_pkg_dynamic = cast(Any, redis_pkg)
+    redis_pkg_dynamic.asyncio = redis_async
     monkeypatch.setitem(sys.modules, "redis", redis_pkg)
     monkeypatch.setitem(sys.modules, "redis.asyncio", redis_async)
     monkeypatch.setitem(sys.modules, "redis.exceptions", redis_exc)
@@ -170,9 +164,7 @@ async def test_kafka_consume_routes_outcomes_commits_and_lag():
 @pytest.mark.asyncio
 async def test_kafka_handler_exception_and_disconnect():
     consumer = KafkaConsumer()
-    msg = SimpleNamespace(
-        value={"sample_data": [1.0]}, topic="t", partition=0, offset=1
-    )
+    msg = SimpleNamespace(value={"sample_data": [1.0]}, topic="t", partition=0, offset=1)
     tp = object()
     fake = SimpleNamespace(
         getmany=AsyncMock(return_value={tp: [msg]}),
@@ -213,8 +205,9 @@ async def test_kafka_connect_and_connect_failure(monkeypatch):
             created.append(self)
 
     module = types.ModuleType("aiokafka")
-    cast(Any, module).AIOKafkaConsumer = FakeConsumer
-    cast(Any, module).AIOKafkaProducer = FakeProducer
+    module_dynamic = cast(Any, module)
+    module_dynamic.AIOKafkaConsumer = FakeConsumer
+    module_dynamic.AIOKafkaProducer = FakeProducer
     monkeypatch.setitem(sys.modules, "aiokafka", module)
     consumer = KafkaConsumer()
     await consumer.connect()
@@ -226,7 +219,7 @@ async def test_kafka_connect_and_connect_failure(monkeypatch):
             super().__init__(*args, **kwargs)
             self.start = AsyncMock(side_effect=OSError("offline"))
 
-    cast(Any, module).AIOKafkaConsumer = BadConsumer
+    module_dynamic.AIOKafkaConsumer = BadConsumer
     broken = KafkaConsumer()
     with pytest.raises(ConnectionError, match="offline"):
         await broken.connect()
@@ -278,7 +271,8 @@ def test_redis_rate_limiter_counts_and_health(monkeypatch):
         pipeline=MagicMock(return_value=pipe),
     )
     fake_redis = types.ModuleType("redis")
-    cast(Any, fake_redis).from_url = MagicMock(return_value=redis_client)
+    fake_redis_dynamic = cast(Any, fake_redis)
+    fake_redis_dynamic.from_url = MagicMock(return_value=redis_client)
     monkeypatch.setitem(sys.modules, "redis", fake_redis)
     limiter = api.RedisRateLimiter("redis://example", max_requests=1, window_seconds=60)
     assert limiter.is_allowed("peer") is True
@@ -293,9 +287,7 @@ def test_redis_rate_limiter_counts_and_health(monkeypatch):
 async def test_connection_manager_accept_broadcast_and_prune():
     manager = api.ConnectionManager()
     good = SimpleNamespace(accept=AsyncMock(), send_json=AsyncMock())
-    bad = SimpleNamespace(
-        accept=AsyncMock(), send_json=AsyncMock(side_effect=OSError("gone"))
-    )
+    bad = SimpleNamespace(accept=AsyncMock(), send_json=AsyncMock(side_effect=OSError("gone")))
     good_ws = cast(Any, good)
     bad_ws = cast(Any, bad)
     await manager.connect(good_ws)
@@ -362,16 +354,12 @@ async def test_readiness_all_fail_closed_branches_and_ready(monkeypatch):
 
     monkeypatch.setattr(api, "_rate_limiter", SimpleNamespace(ready=lambda: True))
     monkeypatch.setattr(
-        api,
-        "_detector",
-        SimpleNamespace(get_stats=MagicMock(side_effect=RuntimeError("bad"))),
+        api, "_detector", SimpleNamespace(get_stats=MagicMock(side_effect=RuntimeError("bad")))
     )
     assert (await api.readiness_check()).status_code == 503
 
     monkeypatch.setattr(
-        api,
-        "_detector",
-        SimpleNamespace(get_stats=lambda: SimpleNamespace(baseline_size=99)),
+        api, "_detector", SimpleNamespace(get_stats=lambda: SimpleNamespace(baseline_size=99))
     )
     response = await api.readiness_check()
     assert response.status_code == 200
@@ -379,9 +367,7 @@ async def test_readiness_all_fail_closed_branches_and_ready(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_score_and_batch_success_broadcast(monkeypatch):
-    result = SimpleNamespace(
-        score=0.9, is_poisoned=True, method_votes={"z": True}, latency_ms=1.2
-    )
+    result = SimpleNamespace(score=0.9, is_poisoned=True, method_votes={"z": True}, latency_ms=1.2)
     monkeypatch.setattr(api, "_baseline_ready", lambda: True)
     runner = AsyncMock(side_effect=[result, [result, result]])
     monkeypatch.setattr(api, "_run_bounded", runner)
@@ -390,9 +376,7 @@ async def test_score_and_batch_success_broadcast(monkeypatch):
 
     single = await api.score_sample(api.SampleRequest(features=[1.0], source="unit"))
     assert single.is_poisoned is True
-    batch = await api.score_batch(
-        api.BatchRequest(samples=[[1.0], [2.0]], source="unit")
-    )
+    batch = await api.score_batch(api.BatchRequest(samples=[[1.0], [2.0]], source="unit"))
     assert batch.poisoned_count == 2
     assert broadcast.await_count == 2
 
