@@ -1,4 +1,7 @@
-# Fingerprint-scoped historical triage only. Do not add broad path or rule exclusions.
+# Exact historical findings reviewed during the 2026-10-01 production-hardening audit.
+# These fingerprints are limited to verified test/example/dependency fixtures.
+# mlsec-dashboards also includes the explicitly revoked legacy local dashboard key.
+# New findings, new commits, or changed lines are not suppressed.
 96d760e52452b4e76134656433da24928b14249d:.venv-test/Lib/site-packages/numpy/random/tests/test_generator_mt19937.py:generic-api-key:30
 96d760e52452b4e76134656433da24928b14249d:.venv-test/Lib/site-packages/numpy/random/tests/test_generator_mt19937.py:generic-api-key:31
 96d760e52452b4e76134656433da24928b14249d:.venv-test/Lib/site-packages/numpy/random/tests/test_generator_mt19937.py:generic-api-key:36
