@@ -206,7 +206,7 @@ class RateLimiter:
                 self._requests.pop(key, None)
             if len(self._requests) >= 10000:
                 return False
-        self._requests[identity] = [t for t in self._requests[identity] if t > window_start]
+        self._requests[identity] = [t for t in self._requests.get(identity, []) if t > window_start]
         if len(self._requests[identity]) >= self._max_requests:
             return False
         self._requests[identity].append(now)
