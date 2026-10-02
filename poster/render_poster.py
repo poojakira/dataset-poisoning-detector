@@ -72,9 +72,9 @@ for line in metrics_text.splitlines():
     metrics.append((k,v))
 
 primary_metrics=metrics[:4]
-extra_metrics=metrics[4:8]
+extra_metrics=metrics[4:]
 if extra_metrics:
-    evidence=(evidence[:5] + [f"{k}: {v}" for k,v in extra_metrics])[:8]
+    evidence=([f"{k}: {v}" for k,v in extra_metrics] + evidence)[:10]
 if not methods:
     methods=["Inspect the trust boundary","Apply repository-specific security checks","Record reproducible evidence"]
 if not evidence:
@@ -110,7 +110,7 @@ for i,m in enumerate(methods,1):
     method_rows += f'<div class="method-row"><span>{i:02d}</span><div>{esc(m)}</div></div>'
 
 evidence_chips=""
-for i,e in enumerate(evidence[:6],1):
+for i,e in enumerate(evidence[:10],1):
     evidence_chips += f'<div class="e-chip"><span>EV-{i:02d}</span><div>{esc(e)}</div></div>'
 
 css = r"""
