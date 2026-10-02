@@ -7,7 +7,6 @@ from http.client import HTTPMessage
 from types import SimpleNamespace
 from typing import Any, cast
 
-import numpy as np
 import pytest
 
 import poison_detector.dataset_url_scanner as dus
