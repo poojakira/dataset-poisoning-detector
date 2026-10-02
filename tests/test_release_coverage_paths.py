@@ -50,9 +50,7 @@ async def test_redis_consume_routes_all_outcomes_and_malformed():
             )
         if message.message_id == "3-0":
             consumer.stop()
-            return ProcessingResult(
-                message.message_id, dead_lettered=True, error="rejected"
-            )
+            return ProcessingResult(message.message_id, dead_lettered=True, error="rejected")
         raise AssertionError("unexpected")
 
     await consumer.consume(handler)
@@ -170,9 +168,7 @@ async def test_kafka_consume_routes_outcomes_commits_and_lag():
 @pytest.mark.asyncio
 async def test_kafka_handler_exception_and_disconnect():
     consumer = KafkaConsumer()
-    msg = SimpleNamespace(
-        value={"sample_data": [1.0]}, topic="t", partition=0, offset=1
-    )
+    msg = SimpleNamespace(value={"sample_data": [1.0]}, topic="t", partition=0, offset=1)
     tp = object()
     fake = SimpleNamespace(
         getmany=AsyncMock(return_value={tp: [msg]}),
@@ -293,9 +289,7 @@ def test_redis_rate_limiter_counts_and_health(monkeypatch):
 async def test_connection_manager_accept_broadcast_and_prune():
     manager = api.ConnectionManager()
     good = SimpleNamespace(accept=AsyncMock(), send_json=AsyncMock())
-    bad = SimpleNamespace(
-        accept=AsyncMock(), send_json=AsyncMock(side_effect=OSError("gone"))
-    )
+    bad = SimpleNamespace(accept=AsyncMock(), send_json=AsyncMock(side_effect=OSError("gone")))
     good_ws = cast(Any, good)
     bad_ws = cast(Any, bad)
     await manager.connect(good_ws)
@@ -379,9 +373,7 @@ async def test_readiness_all_fail_closed_branches_and_ready(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_score_and_batch_success_broadcast(monkeypatch):
-    result = SimpleNamespace(
-        score=0.9, is_poisoned=True, method_votes={"z": True}, latency_ms=1.2
-    )
+    result = SimpleNamespace(score=0.9, is_poisoned=True, method_votes={"z": True}, latency_ms=1.2)
     monkeypatch.setattr(api, "_baseline_ready", lambda: True)
     runner = AsyncMock(side_effect=[result, [result, result]])
     monkeypatch.setattr(api, "_run_bounded", runner)
@@ -390,9 +382,7 @@ async def test_score_and_batch_success_broadcast(monkeypatch):
 
     single = await api.score_sample(api.SampleRequest(features=[1.0], source="unit"))
     assert single.is_poisoned is True
-    batch = await api.score_batch(
-        api.BatchRequest(samples=[[1.0], [2.0]], source="unit")
-    )
+    batch = await api.score_batch(api.BatchRequest(samples=[[1.0], [2.0]], source="unit"))
     assert batch.poisoned_count == 2
     assert broadcast.await_count == 2
 
