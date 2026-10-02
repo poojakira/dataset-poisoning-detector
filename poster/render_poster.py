@@ -12,6 +12,7 @@ metrics_text = metrics_path.read_text(encoding="utf-8", errors="replace") if met
 def clean(s: str) -> str:
     s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
     s = s.replace("**","").replace("`","").replace("\u2014","-").replace("\u2013","-").replace("\u2192","->")
+    s = s.replace("\ufffd", "")
     return re.sub(r"\s+", " ", s).strip()
 
 def sec(*names: str) -> str:
@@ -31,25 +32,22 @@ def items(block: str) -> list[str]:
                 out.append(v)
     return out
 
-def reproducibility_text(s: str) -> str:
-    blocks = re.findall(r"(?ms)```(?:[A-Za-z0-9_-]+)?\n(.*?)```", s)
-    outside = re.sub(r"(?ms)```.*?```", "", s)
-    parts = []
-    if blocks:
-        parts.append("\n".join(line.rstrip() for line in blocks[0].strip().splitlines()))
-    prose = clean(outside)
-    if prose:
-        parts.append(prose)
-    return "\n\n".join(parts).strip()
+def strip_fences(s: str) -> str:
+    s=re.sub(r"(?ms)\`\`\`.*?\`\`\`", "", s)
+    return clean(s)
+
+def esc(s: str) -> str:
+    return html.escape(s, quote=True)
 
 title = clean(sec("Academic Project Title","Project Title")) or repo.name.replace("-"," ").title()
 subtitle = clean(sec("Subtitle"))
 contribution = clean(sec("One-Sentence Contribution","Contribution","Research Contribution"))
 methods = items(sec("Method","Methodology"))[:6]
 evidence = items(sec("Current Verified Evidence","Verified Evidence","Evidence at Poster Snapshot + Claim Ledger"))[:7]
-limits = items(sec("Honest Boundaries","Limitations","Limitations & Residual Risk"))[:6]
-repro = reproducibility_text(sec("Reproducibility"))[:900]
-repository = clean(sec("Repository")) or f"github.com/poojakira/{repo.name}"
+limits = items(sec("Honest Boundaries","Limitations","Limitations & Residual Risk","Not established by this repository"))[:6]
+repro_block = sec("Reproducibility")
+repro = strip_fences(repro_block)[:900]
+repository = clean(sec("Repository")) or f"github.com/poojakira/{repo.name.replace('_readonly_','')}"
 
 metrics=[]
 headline_match=re.search(r"(?ms)^##+\s+Headline cards\s*$\n(.*?)(?=^##+\s+|\Z)", metrics_text)
@@ -67,177 +65,164 @@ for line in metrics_text.splitlines():
     if len(cells)<2:
         continue
     k,v=cells[0],cells[1]
-    if k.lower() in {"metric","current value","value","item","claim"}:
+    if k.lower() in {"metric","current value","value","item","claim","series"}:
         continue
     if not k or not v or (k,v) in metrics:
         continue
     metrics.append((k,v))
-primary_metrics=metrics[:4]
-extra_metrics=metrics[4:]
-if extra_metrics:
-    evidence=(evidence[:5] + [f"{k}: {v}" for k,v in extra_metrics[:3]])[:8]
 
+primary_metrics=metrics[:4]
+extra_metrics=metrics[4:8]
+if extra_metrics:
+    evidence=(evidence[:5] + [f"{k}: {v}" for k,v in extra_metrics])[:8]
 if not methods:
     methods=["Inspect the trust boundary","Apply repository-specific security checks","Record reproducible evidence"]
 if not evidence:
     evidence=["See README, verified metrics, tests, and CI for the current evidence snapshot."]
 if not limits:
-    limits=["No additional limitations section is present in the research brief; consult the README before generalizing results."]
+    limits=["No additional limitation text was found in the research brief. Consult the README before generalizing results."]
 if not repro:
-    repro="Clone the repository, check out the evidence snapshot, install documented dependencies, and run the repository test commands from the README."
+    repro="Clone the repository, check out the cited evidence snapshot, install documented dependencies, and run the verification commands in the README."
 
-def esc(s: str) -> str:
-    return html.escape(s, quote=True)
+def bullets(xs: list[str], cls="") -> str:
+    return '<ul class="'+cls+'">' + "".join("<li>"+esc(x)+"</li>" for x in xs) + "</ul>"
 
-def bullets(xs: list[str]) -> str:
-    return "<ul>" + "".join("<li>"+esc(x)+"</li>" for x in xs) + "</ul>"
+def title_class(s: str) -> str:
+    if len(s) > 85: return "title xlong"
+    if len(s) > 64: return "title long"
+    return "title"
 
-metric_cards="".join(
-    '<div class="metric"><div class="mv">'+esc(v)+'</div><div class="ml">'+esc(k)+'</div></div>'
-    for k,v in primary_metrics
-)
+metric_cards=""
+for k,v in primary_metrics:
+    vc="metric-value"
+    if len(v)>22: vc+=" tiny"
+    elif len(v)>14: vc+=" small"
+    metric_cards += f'<div class="metric"><div class="{vc}">{esc(v)}</div><div class="metric-label">{esc(k)}</div></div>'
 if not metric_cards:
-    metric_cards='<div class="metric"><div class="mv">Verified</div><div class="ml">Repository evidence</div></div>'
+    metric_cards='<div class="metric"><div class="metric-value">Verified</div><div class="metric-label">Repository evidence</div></div>'
 
-flow_html=""
+flow_nodes=""
 for i,m in enumerate(methods,1):
-    flow_html += f'<div class="flow-node"><div class="step">{i:02d}</div><div class="flow-text">{esc(m)}</div></div>'
+    flow_nodes += f'<div class="flow-node"><div class="flow-index">{i:02d}</div><div>{esc(m)}</div></div>'
+
+method_rows=""
+for i,m in enumerate(methods,1):
+    method_rows += f'<div class="method-row"><span>{i:02d}</span><div>{esc(m)}</div></div>'
+
+evidence_chips=""
+for i,e in enumerate(evidence[:6],1):
+    evidence_chips += f'<div class="e-chip"><span>EV-{i:02d}</span><div>{esc(e)}</div></div>'
 
 css = r"""
 @page { size: 36in 48in; margin: 0; }
 * { box-sizing: border-box; }
-html, body { margin: 0; width: 36in; height: 48in; font-family: "Segoe UI", Arial, sans-serif; background: #eef3f7; color: #11263d; }
-.poster { width: 36in; height: 48in; overflow: hidden; background: #eef3f7; }
-.hero {
-  height: 5.6in; padding: .72in 1.15in .62in 1.15in; color: #fff;
-  background: linear-gradient(118deg,#07182f 0%,#0a3558 58%,#0b6281 100%);
-  border-bottom: .10in solid #23a2c4;
-}
-.kicker { font-size: 17pt; letter-spacing: 2.4px; text-transform: uppercase; color: #86e5f8; font-weight: 800; }
-h1 { font-size: 46pt; line-height: 1.04; margin: .12in 0 .12in; max-width: 33in; font-weight: 750; text-wrap: balance; overflow-wrap: anywhere; hyphens: auto; }
-.sub { font-size: 24pt; line-height: 1.2; color: #d8f0f6; max-width: 32.5in; }
-.repo { font-size: 14.5pt; color: #93def0; margin-top: .22in; white-space: normal; }
+html, body { margin:0; width:36in; height:48in; font-family:"Segoe UI",Arial,sans-serif; background:#edf3f7; color:#13263a; }
+.poster { width:36in; height:48in; overflow:hidden; background:#edf3f7; }
+.hero { height:5.4in; padding:.72in 1.05in .55in; display:grid; grid-template-columns:2.3fr .7fr; gap:.65in; color:#fff;
+  background:linear-gradient(125deg,#06182f 0%,#0b3657 58%,#086b7e 100%); border-bottom:.09in solid #23b0c9; }
+.kicker { font-size:15pt; font-weight:800; letter-spacing:2.6px; color:#7ce8f5; text-transform:uppercase; }
+.title { font-size:42pt; line-height:1.03; margin:.14in 0 .12in; font-weight:760; max-width:25in; overflow-wrap:anywhere; }
+.title.long { font-size:36pt; } .title.xlong { font-size:31pt; }
+.subtitle { font-size:20pt; line-height:1.2; color:#d6edf4; max-width:24in; }
+.repo { margin-top:.20in; font-size:12.5pt; color:#98dce8; overflow-wrap:anywhere; }
+.hero-side { align-self:center; border-left:2px solid rgba(128,225,241,.45); padding-left:.42in; }
+.hero-side .label { font-size:11pt; text-transform:uppercase; letter-spacing:1.5px; color:#84e4f1; font-weight:800; }
+.hero-side .value { margin-top:.08in; font-size:17pt; line-height:1.25; font-weight:700; }
+.hero-side .note { margin-top:.15in; font-size:11.5pt; line-height:1.35; color:#c4e3eb; }
 
-.metrics {
-  height: 3.7in; padding: .45in 1.15in; display: grid;
-  grid-template-columns: repeat(4, 1fr); gap: .28in; background: #f8fbfd;
-  border-bottom: 2px solid #d2e0e9;
-}
-.metric {
-  background: #fff; border: 2px solid #cddde8; border-top: 9px solid #1683aa;
-  border-radius: .15in; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: .20in;
-}
-.mv { font-size: 28pt; font-weight: 800; color: #0d446f; text-align: center; line-height: 1.1; }
-.ml { font-size: 13pt; font-weight: 700; color: #556a7f; text-align: center; margin-top: .09in; line-height: 1.2; }
+.metrics { height:3.6in; display:grid; grid-template-columns:repeat(4,1fr); gap:.28in; padding:.42in 1.05in; background:#f9fbfd; border-bottom:2px solid #d6e2ea; }
+.metric { background:#fff; border:2px solid #cddde7; border-top:8px solid #168cad; border-radius:.14in; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:.16in .22in; box-shadow:0 4px 12px rgba(5,35,55,.05); }
+.metric-value { font-size:27pt; line-height:1.06; font-weight:850; color:#0b456f; text-align:center; overflow-wrap:anywhere; }
+.metric-value.small { font-size:20pt; } .metric-value.tiny { font-size:15.5pt; }
+.metric-label { margin-top:.08in; font-size:11.8pt; line-height:1.2; font-weight:700; color:#566b7d; text-align:center; }
 
-.top {
-  height: 8.4in; padding: .50in 1.15in .40in; display: grid; grid-template-columns: 1.05fr 1.7fr; gap: .42in;
-}
-.arch {
-  height: 10in; padding: .50in 1.15in .55in; background: #0b2239; color: #fff;
-  border-top: .06in solid #22a3c5; border-bottom: .06in solid #22a3c5;
-}
-.lower {
-  height: 16.7in; padding: .55in 1.15in; display: grid; grid-template-columns: 1.35fr .85fr; gap: .42in;
-}
-.footer {
-  height: 3.6in; padding: .60in 1.15in; background: #07182f; color: #d9e7ef;
-  display: grid; grid-template-columns: 2.5fr 1fr; gap: .5in; align-items: center;
-}
+.arch { height:11.5in; padding:.52in 1.05in; background:#071e34; color:#eefbff; border-bottom:.07in solid #1b9bb8; }
+.section-kicker { font-size:11.5pt; font-weight:800; letter-spacing:1.5px; color:#6fe2f0; text-transform:uppercase; }
+.arch h2 { margin:.06in 0 .28in; font-size:25pt; color:#fff; }
+.arch-grid { display:grid; grid-template-columns:.72fr 2.28fr; gap:.45in; height:9.25in; }
+.boundary { background:linear-gradient(180deg,#0d304c,#0c263e); border:2px solid #245f7a; border-radius:.16in; padding:.35in; display:grid; grid-template-rows:auto 1fr auto; }
+.boundary-title { font-size:16pt; font-weight:800; color:#8ce8f5; }
+.boundary-lanes { margin-top:.25in; display:grid; grid-template-rows:repeat(3,1fr); gap:.22in; }
+.lane { border-left:7px solid #2cb1c8; background:#123a57; border-radius:.10in; padding:.26in; }
+.lane strong { display:block; font-size:13pt; color:#fff; }
+.lane p { margin:.08in 0 0; font-size:11.3pt; line-height:1.32; color:#c8e5ed; }
+.boundary-note { font-size:10.5pt; line-height:1.35; color:#9ec9d4; }
+.flow { display:grid; grid-template-columns:repeat(2,1fr); grid-auto-rows:1fr; gap:.28in; }
+.flow-node { position:relative; border:2px solid #287897; background:linear-gradient(145deg,#102f4a,#11415d); border-radius:.15in; padding:.38in .35in .30in .93in; display:flex; align-items:center; font-size:14.2pt; line-height:1.3; font-weight:650; }
+.flow-index { position:absolute; left:.25in; top:.25in; width:.46in; height:.46in; border-radius:50%; background:#29b7cc; color:#061c2c; display:flex; align-items:center; justify-content:center; font-size:12pt; font-weight:900; }
+.flow-node::after { content:"→"; position:absolute; right:-.30in; top:50%; transform:translateY(-50%); color:#65d5e8; font-size:23pt; font-weight:900; z-index:4; }
+.flow-node:nth-child(2n)::after { content:"↓"; right:50%; top:auto; bottom:-.34in; transform:translateX(50%); }
+.flow-node:last-child::after { content:""; }
 
-.card {
-  height: 100%; background: #fff; border: 2px solid #d3e0e9; border-radius: .16in; padding: .36in .42in;
-  box-shadow: 0 5px 18px rgba(6,34,56,.06);
-}
-.card h2, .arch h2 {
-  font-size: 23pt; margin: 0 0 .16in; color: #0b547f; padding-bottom: .08in;
-  border-bottom: 4px solid #35a8c6;
-}
-.arch h2 { color: #8ce9fa; border-bottom-color: #2d93b1; }
-.contrib { background: #eaf8fb; border-color: #96d9e8; }
-.contrib p { font-size: 21pt; line-height: 1.34; font-weight: 600; margin: .08in 0 0; }
-.card p, .card li { font-size: 19pt; line-height: 1.30; }
-.card ul { margin: .04in 0 0 .28in; padding: 0; }
-.card li { margin: .08in 0; }
-.evidence { border-left: 10px solid #178e75; }
-.limits { border-left: 10px solid #bd7a35; }
-.method { border-left: 10px solid #1683aa; }
+.middle { height:10.5in; padding:.48in 1.05in; display:grid; grid-template-columns:1.35fr .9fr; gap:.38in; background:#eef3f7; }
+.panel { background:#fff; border:2px solid #d2dfe8; border-radius:.15in; box-shadow:0 5px 16px rgba(4,35,55,.06); padding:.36in .40in; overflow:hidden; }
+.panel h2 { margin:0 0 .18in; font-size:21pt; color:#0b557e; border-bottom:4px solid #34a9c4; padding-bottom:.07in; }
+.contrib { border-left:9px solid #22a1b9; background:#eaf8fb; height:3.05in; margin-bottom:.30in; }
+.contrib p { font-size:15.2pt; line-height:1.36; font-weight:620; margin:.05in 0; }
+.evidence-panel { height:6.1in; border-left:9px solid #159274; }
+.evidence-grid { display:grid; grid-template-columns:1fr 1fr; gap:.18in; }
+.e-chip { background:#f6fafc; border:1.5px solid #d5e3eb; border-radius:.10in; padding:.17in .19in; display:grid; grid-template-columns:.52in 1fr; gap:.10in; font-size:11.7pt; line-height:1.28; }
+.e-chip span { font-size:9.5pt; font-weight:900; color:#0b7e90; letter-spacing:.3px; }
+.method-panel { border-left:9px solid #1d7fb1; }
+.method-row { min-height:.72in; display:grid; grid-template-columns:.52in 1fr; gap:.14in; align-items:center; background:#f5f9fc; border:1.5px solid #d1e0e9; border-radius:.10in; padding:.12in .17in; margin:.12in 0; font-size:12pt; line-height:1.28; font-weight:650; }
+.method-row span { width:.40in; height:.40in; border-radius:50%; background:#157fa2; color:#fff; display:flex; align-items:center; justify-content:center; font-size:9.5pt; font-weight:900; }
 
-.flow-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(2.15in, auto);
-  gap: .30in .34in; margin-top: .30in;
-}
-.flow-node {
-  position: relative; border: 2px solid #2c7899; background: linear-gradient(145deg,#102d48,#123b59);
-  border-radius: .16in; padding: .27in .30in .25in .84in; min-height: 2.15in; display: flex; align-items: center;
-}
-.step {
-  position: absolute; left: .24in; top: .25in; width: .46in; height: .46in; border-radius: 50%;
-  background: #28a6c7; color: #061a2b; font-size: 14pt; font-weight: 900; display:flex; align-items:center; justify-content:center;
-}
-.flow-text { font-size: 18pt; line-height: 1.28; font-weight: 650; color: #eef9fc; }
-.flow-node::after { content: "\2192"; position:absolute; right:-.30in; top:50%; transform:translateY(-50%); color:#6fd2e9; font-size:24pt; font-weight:900; z-index:4; }
-.flow-node:nth-child(3n)::after { content:""; }
-.flow-node:nth-child(3)::after { content:"\2193"; right:50%; top:auto; bottom:-.43in; transform:translateX(50%); }
-.arch-note { font-size: 13.5pt; color: #a9dcea; margin-top: .30in; }
+.lower { height:13.5in; padding:.48in 1.05in .52in; display:grid; grid-template-columns:1.05fr 1fr .95fr; gap:.34in; background:#e8f0f5; border-top:2px solid #d4e1e8; }
+.lower .panel { height:100%; }
+.limits { border-left:9px solid #c27a2c; }
+.repro { border-left:9px solid #4a7192; }
+.provenance { border-left:9px solid #6c62a8; }
+.panel ul { margin:.05in 0 0 .28in; padding:0; }
+.panel li { font-size:12pt; line-height:1.35; margin:.10in 0; }
+.repro p { font-family:"Cascadia Mono","Consolas",monospace; font-size:11.2pt; line-height:1.38; overflow-wrap:anywhere; white-space:normal; }
+.prov-card { margin:.15in 0; background:#f7f9fc; border:1.5px solid #dae1e9; border-radius:.10in; padding:.18in; }
+.prov-card strong { display:block; color:#4b438a; font-size:12pt; }
+.prov-card p { margin:.06in 0 0; font-size:11.4pt; line-height:1.32; color:#415366; }
 
-.method-list { display: grid; grid-template-columns: 1fr 1fr; gap: .20in .28in; margin-top: .10in; }
-.method-chip { background:#f3f8fb; border:2px solid #d2e2eb; border-radius:.12in; padding:.20in .22in; font-size:18pt; line-height:1.28; font-weight:650; }
-.right-stack { display:grid; grid-template-rows: 1.05fr .95fr; gap:.40in; height:100%; }
-.repro { background:#f8fbfd; }
-.repro p { font-family: "Cascadia Mono","Consolas",monospace; font-size: 16.5pt; line-height: 1.30; color:#22384d; word-break: break-word; white-space: pre-wrap; }
-
-.footer h3 { font-size: 19pt; color: #86e5f8; margin: 0 0 .08in; }
-.footer p { font-size: 13.5pt; line-height: 1.36; margin: 0; }
-.badge { justify-self: end; border: 2px solid #4aa9c6; border-radius: .14in; padding: .22in .28in; text-align:center; font-size:13pt; font-weight:800; color:#fff; }
+.footer { height:3.5in; padding:.60in 1.05in; background:#06182f; color:#d8e7ee; display:grid; grid-template-columns:2.5fr .8fr; gap:.45in; align-items:center; }
+.footer h3 { margin:0 0 .08in; font-size:18pt; color:#80e2ef; }
+.footer p { margin:0; font-size:11.8pt; line-height:1.36; }
+.badge { justify-self:end; border:2px solid #3f9eb9; border-radius:.14in; padding:.20in .27in; text-align:center; color:#fff; font-size:11.5pt; font-weight:800; }
 """
 
-method_chips="".join('<div class="method-chip">'+esc(m)+'</div>' for m in methods)
+prov = [
+    ("Claim discipline","Metrics come from the repository's verified metrics and research brief."),
+    ("Scope discipline","Benchmarks are reported only at their documented fixture, dataset, or test scope."),
+    ("Reproduction","PDF and PNG are generated locally from committed evidence without paid services."),
+]
 
 doc='<!doctype html><html><head><meta charset="utf-8"><style>'+css+'</style></head><body><div class="poster">'
-doc+='<section class="hero"><div class="kicker">Security Engineering Research Poster</div><h1>'+esc(title)+'</h1><div class="sub">'+esc(subtitle)+'</div><div class="repo">'+esc(repository)+'</div></section>'
+doc+=f'<section class="hero"><div><div class="kicker">Security Engineering Research Poster</div><h1 class="{title_class(title)}">{esc(title)}</h1><div class="subtitle">{esc(subtitle)}</div><div class="repo">{esc(repository)}</div></div><div class="hero-side"><div class="label">Evidence posture</div><div class="value">Verified, scoped, reproducible</div><div class="note">Claims are constrained to the repository evidence snapshot and stated limitations.</div></div></section>'
 doc+='<section class="metrics">'+metric_cards+'</section>'
-doc+='<section class="top"><div class="card contrib"><h2>Contribution</h2><p>'+esc(contribution or "Repository contribution documented in the research brief.")+'</p></div><div class="card evidence"><h2>Verified Evidence</h2>'+bullets(evidence)+'</div></section>'
-doc+='<section class="arch"><h2>Architecture / Threat Flow</h2><div class="flow-grid">'+flow_html+'</div><div class="arch-note">Flow labels come directly from the repository research brief. They describe the tested control path, not a universal security guarantee.</div></section>'
-doc+='<section class="lower"><div class="card method"><h2>Methodology and Control Path</h2><div class="method-list">'+method_chips+'</div></div><div class="right-stack"><div class="card limits"><h2>Limitations and Residual Risk</h2>'+bullets(limits)+'</div><div class="card repro"><h2>Reproducibility</h2><p>'+esc(repro)+'</p></div></div></section>'
-doc+='<footer class="footer"><div><h3>Evidence-backed security engineering</h3><p>Poster claims are constrained to the repository evidence snapshot. README, verified metrics, tests, CI, and committed artifacts remain authoritative.</p></div><div class="badge">36 x 48 in<br>Full-page PDF + PNG</div></footer>'
+doc+='<section class="arch"><div class="section-kicker">System view</div><h2>Architecture and Threat-Control Flow</h2><div class="arch-grid"><div class="boundary"><div class="boundary-title">Trust Boundary</div><div class="boundary-lanes"><div class="lane"><strong>Input surface</strong><p>Data, models, requests, policies, or artifacts entering the tested path.</p></div><div class="lane"><strong>Control surface</strong><p>Repository-specific validation, analysis, and fail-closed checks.</p></div><div class="lane"><strong>Evidence surface</strong><p>Findings, metrics, tests, logs, or reproducible artifacts.</p></div></div><div class="boundary-note">This diagram describes the tested repository path, not a universal deployment guarantee.</div></div><div class="flow">'+flow_nodes+'</div></div></section>'
+doc+='<section class="middle"><div><div class="panel contrib"><h2>Research Contribution</h2><p>'+esc(contribution or "Repository contribution documented in the research brief.")+'</p></div><div class="panel evidence-panel"><h2>Verified Evidence</h2><div class="evidence-grid">'+evidence_chips+'</div></div></div><div class="panel method-panel"><h2>Method and Control Path</h2>'+method_rows+'</div></section>'
+prov_html="".join(f'<div class="prov-card"><strong>{esc(a)}</strong><p>{esc(b)}</p></div>' for a,b in prov)
+doc+='<section class="lower"><div class="panel limits"><h2>Limitations and Residual Risk</h2>'+bullets(limits)+'</div><div class="panel repro"><h2>Reproducibility</h2><p>'+esc(repro)+'</p></div><div class="panel provenance"><h2>Evidence Provenance</h2>'+prov_html+'</div></section>'
+doc+='<footer class="footer"><div><h3>Evidence-backed security engineering</h3><p>README, verified metrics, tests, CI, and committed artifacts remain authoritative. Poster layout emphasizes architecture, controls, evidence, limitations, and reproduction rather than unsupported efficacy claims.</p></div><div class="badge">36 x 48 in<br>PDF + PNG parity</div></footer>'
 doc+='</div></body></html>'
 
 html_path=poster/"_poster_render.html"
 html_path.write_text(doc,encoding="utf-8")
-browsers=[
- Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
- Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
- Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
-]
+browsers=[Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")]
 browser=next((p for p in browsers if p.exists()),None)
-if browser is None:
-    raise SystemExit("browser not found")
-
+if browser is None: raise SystemExit("browser not found")
 pdf=poster/"poster_36x48.pdf"
 png=poster/"poster.png"
 profile=poster/"_poster_profile"
 shutil.rmtree(profile,ignore_errors=True)
-uri=html_path.resolve().as_uri()
-subprocess.run([
- str(browser),"--headless=new","--disable-gpu",f"--user-data-dir={profile}",
- "--no-pdf-header-footer",f"--print-to-pdf={pdf}",uri
-],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-
+subprocess.run([str(browser),"--headless=new","--disable-gpu",f"--user-data-dir={profile}","--no-pdf-header-footer",f"--print-to-pdf={pdf}",html_path.resolve().as_uri()],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 try:
     import fitz
 except Exception as exc:
-    raise SystemExit(f"PyMuPDF is required for full-page PNG parity: {exc}")
-
-doc_pdf=fitz.open(pdf)
-page=doc_pdf[0]
+    raise SystemExit(f"PyMuPDF required: {exc}")
+d=fitz.open(pdf)
+if len(d)!=1: raise SystemExit(f"poster must be one page, got {len(d)}")
+page=d[0]
 target_w=1800
 scale=target_w/page.rect.width
 pix=page.get_pixmap(matrix=fitz.Matrix(scale,scale),alpha=False)
 pix.save(png)
-doc_pdf.close()
-
+d.close()
 html_path.unlink(missing_ok=True)
 shutil.rmtree(profile,ignore_errors=True)
 if repo.name=="mcp-agent-security-gateway":
