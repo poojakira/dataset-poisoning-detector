@@ -1,0 +1,7 @@
+# Fingerprint-scoped historical triage only. Do not add broad path or rule exclusions.
+96d760e52452b4e76134656433da24928b14249d:.venv-test/Lib/site-packages/numpy/random/tests/test_generator_mt19937.py:generic-api-key:30
+96d760e52452b4e76134656433da24928b14249d:.venv-test/Lib/site-packages/numpy/random/tests/test_generator_mt19937.py:generic-api-key:31
+96d760e52452b4e76134656433da24928b14249d:.venv-test/Lib/site-packages/numpy/random/tests/test_generator_mt19937.py:generic-api-key:36
+96d760e52452b4e76134656433da24928b14249d:.venv-test/Lib/site-packages/numpy/random/tests/test_generator_mt19937.py:generic-api-key:37
+96d760e52452b4e76134656433da24928b14249d:.venv-test/Lib/site-packages/numpy/random/tests/test_generator_mt19937.py:generic-api-key:42
+96d760e52452b4e76134656433da24928b14249d:.venv-test/Lib/site-packages/numpy/random/tests/test_generator_mt19937.py:generic-api-key:43
