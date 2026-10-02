@@ -16,6 +16,7 @@ from poison_detector.alerting import (
     _validate_http_url,
 )
 from poison_detector.config import DetectorConfig, _load_yaml_file
+from poison_detector.detector import DetectionReport, PoisonResult
 from poison_detector.pipeline import (
     KafkaConsumer,
     PipelineConsumer,
@@ -67,16 +68,16 @@ class _Channel:
         return self.result
 
 
-def _report():
+def _report() -> DetectionReport:
     samples = [
-        SimpleNamespace(
+        PoisonResult(
             sample_idx=0,
             anomaly_score=0.1,
             method="zscore",
             features_flagged=[],
             is_poisoned=False,
         ),
-        SimpleNamespace(
+        PoisonResult(
             sample_idx=1,
             anomaly_score=0.95,
             method="ensemble",
@@ -84,7 +85,7 @@ def _report():
             is_poisoned=True,
         ),
     ]
-    return SimpleNamespace(
+    return DetectionReport(
         total_samples=2,
         poisoned_count=1,
         method_scores={"zscore": 0.2, "ensemble": 0.9},
@@ -109,7 +110,7 @@ def test_report_formats_cover_summary_verbose_json_csv():
 
 
 def test_report_zero_samples_has_no_rate():
-    empty = SimpleNamespace(total_samples=0, poisoned_count=0, method_scores={}, per_sample=[])
+    empty = DetectionReport(total_samples=0, poisoned_count=0, method_scores={}, per_sample=[])
     assert "Poison rate:" not in format_report(empty)
 
 
