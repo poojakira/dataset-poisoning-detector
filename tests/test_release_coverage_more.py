@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import urllib.error
 import urllib.request
-from email.message import Message
+from http.client import HTTPMessage
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -69,7 +69,7 @@ def test_dataset_reference_and_redirect_validation():
     handler = dus._DatasetRedirectHandler()
     req = urllib.request.Request("https://datasets-server.huggingface.co/rows")
     fp = io.BytesIO()
-    headers = Message()
+    headers = HTTPMessage()
     redirected = handler.redirect_request(
         req,
         fp,
@@ -86,7 +86,7 @@ def test_dataset_reference_and_redirect_validation():
             io.BytesIO(),
             302,
             "Found",
-            Message(),
+            HTTPMessage(),
             "https://evil.example/rows",
         )
 
