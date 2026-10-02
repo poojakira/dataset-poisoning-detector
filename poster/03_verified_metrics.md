@@ -1,12 +1,12 @@
 # Verified Metrics - Poster 04
 
-**Code snapshot:** `ed38ad039a60a648c38a247e4136b34bbe287bda`  
-**CI run:** https://github.com/poojakira/dataset-poisoning-detector/actions/runs/36783091096
+**Code snapshot:** `258a4646abcc66bed2c9ccb538fa2f593140e750`
+**Verification:** Local Python 3.12 reproduction on 2026-10-01; CI coverage floor is 90%.
 
 | Metric | Current value |
 |---|---:|
-| Tests passed | **162** |
-| Statement coverage | **70.77%** |
+| Tests passed | **199** |
+| Statement coverage | **90.88%** |
 | Cross-class F1 @ 5% poison | **0.55** |
 | Cross-class F1 @ 10% poison | **0.595** |
 | Cross-class F1 @ 20% poison | **0.6975** |

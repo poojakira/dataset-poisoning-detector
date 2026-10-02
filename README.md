@@ -15,7 +15,7 @@
 > Statistical + spectral screening for poisoned ML training data at the ingestion boundary — honest about what feature-space methods can and cannot catch.
 
 [![CI](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml/badge.svg)](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-162%20passing-brightgreen)](RUNBOOK.md)
+[![Tests](https://img.shields.io/badge/tests-199%20passing-brightgreen)](RUNBOOK.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira))
@@ -30,8 +30,8 @@ Reproduced on current `main` with the `[dev,realtime,kafka]` extras (Python 3.12
 
 | Metric | Current verified result |
 |---|---:|
-| Tests | 162 passing, 0 skipped |
-| Statement coverage | 70.77% (CI gate 45%) |
+| Tests | 199 passing, 0 skipped |
+| Statement coverage | 90.88% (CI gate 90%) |
 | Detection methods | z-score, IQR, Isolation Forest, ensemble, spectral top-1, cross-class centroid, streaming |
 | Cross-class label-flip F1 | 0.55 / 0.60 / 0.70 @ 5% / 10% / 20% poison |
 | Feature-space ensemble (CIFAR-10 raw pixels) | AUC ~0.53–0.56 (near-random — documented limitation) |
@@ -458,7 +458,7 @@ The engineering value of this project is primarily in the streaming infrastructu
 | Quarantine storage | Yes | Redis (streaming) + SQLite (batch) |
 
 > **Storage boundary:** `PostgresStore` is a deliberate stub and raises `NotImplementedError`; PostgreSQL quarantine persistence is **not implemented or supported** in the current repository. Supported paths are Redis for streaming quarantine and SQLite for batch/local storage.
-| Test coverage | Yes | current CI: 162 tests passing (0 skipped) with the `[dev,realtime,kafka]` extras, covering all components incl. input-validation hardening |
+| Test coverage | Yes | current verification: 199 tests passing (0 skipped) with the `[dev,realtime,kafka]` extras, covering all components incl. input-validation hardening |
 | CI/CD | Yes | GitHub Actions (`.github/` directory) |
 | Runbook | Yes | `RUNBOOK.md` with operational procedures |
 | Changelog | Yes | `CHANGELOG.md` with version history |
