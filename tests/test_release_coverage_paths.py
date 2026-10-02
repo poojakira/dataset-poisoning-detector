@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 import types
 from types import SimpleNamespace
@@ -395,7 +396,7 @@ async def test_score_and_batch_failures(monkeypatch):
     assert exc.value.status_code == 503
 
     monkeypatch.setattr(api, "_baseline_ready", lambda: True)
-    monkeypatch.setattr(api, "_run_bounded", AsyncMock(side_effect=TimeoutError()))
+    monkeypatch.setattr(api, "_run_bounded", AsyncMock(side_effect=asyncio.TimeoutError()))
     with pytest.raises(HTTPException) as exc:
         await api.score_sample(api.SampleRequest(features=[1.0]))
     assert exc.value.status_code == 504
