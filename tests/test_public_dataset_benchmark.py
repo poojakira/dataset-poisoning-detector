@@ -9,6 +9,9 @@ def test_public_dataset_benchmark_is_deterministic_and_scoped():
     assert first["samples"] == 569
     assert first["features"] == 30
     assert first["poisoned_samples"] > 0
+    assert 0 < first["flagged_samples"] < first["samples"]
+    assert first["true_positives"] > 0
+    assert first["f1"] >= 0.10
     assert 0.0 <= first["precision"] <= 1.0
     assert 0.0 <= first["recall"] <= 1.0
     assert 0.0 <= first["f1"] <= 1.0
