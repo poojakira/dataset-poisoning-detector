@@ -191,10 +191,25 @@ jobs:
       - name: Run real-implementation benchmark smoke
         run: |
           python benchmarks/throughput_tracker.py --ci --stream-samples 2000 --dim 20 --efficacy-samples 400 --output benchmark-results.json
+      - name: Run public real-dataset label-flip benchmark
+        run: |
+          PYTHONPATH=src python benchmarks/public_breast_cancer_label_flip.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path("results/public_breast_cancer_label_flip.json").read_text())
+          assert data["dataset"] == "sklearn.datasets.load_breast_cancer"
+          assert data["true_positives"] > 0
+          assert data["f1"] >= 0.10
+          assert 0 < data["flagged_samples"] < data["samples"]
+          print(json.dumps(data, indent=2))
+          PY
       - name: Upload benchmark evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: benchmark-results
-          path: benchmark-results.json
+          path: |
+            benchmark-results.json
+            results/public_breast_cancer_label_flip.json
           retention-days: 30
