@@ -13,6 +13,6 @@ pytest tests/ -q --cov=poison_detector --cov-report=term
 python benchmark/cifar10_label_flip_benchmark.py
 ```
 
-Expected current evidence: **199 passed**, **90.88% statement coverage**.
+Expected current evidence: **200 passed**, **91.20% statement coverage**.
 
 Expected committed benchmark cross-class F1: **0.55 / 0.595 / 0.6975** at 5% / 10% / 20% poison.
