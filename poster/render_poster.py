@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
-import html, re, shutil, subprocess, sys
+import html, os, re, shutil, subprocess, sys
 
 repo = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]).resolve()
 poster = repo / "poster"
@@ -204,8 +204,15 @@ doc+='</div></body></html>'
 html_path=poster/"_poster_render.html"
 html_path.write_text(doc,encoding="utf-8")
 browsers=[Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")]
-browser=next((p for p in browsers if p.exists()),None)
-if browser is None: raise SystemExit("browser not found")
+browser_env = os.environ.get("POSTER_BROWSER")
+browser = Path(browser_env) if browser_env else None
+if browser is None:
+    system_candidates = [shutil.which(name) for name in ("google-chrome", "chromium", "chromium-browser", "microsoft-edge")]
+    browser = next((Path(p) for p in system_candidates if p and Path(p).exists()), None)
+if browser is None:
+    browser = next((p for p in browsers if p.exists()), None)
+if browser is None:
+    raise SystemExit("browser not found")
 pdf=poster/"poster_36x48.pdf"
 png=poster/"poster.png"
 profile=poster/"_poster_profile"
