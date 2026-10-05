@@ -1,6 +1,6 @@
 # Research Brief - Poster 04
 
-> Evidence status: Refreshed against final main code snapshot `258a4646abcc66bed2c9ccb538fa2f593140e750`. Local Python 3.12 verification on 2026-10-01 reproduced 199 passing tests at 90.88% statement coverage; CI now enforces a 90% floor.
+> Evidence status: Refreshed against final main code snapshot `43313ee7dab746a27999e22796074e4a0d941322`. Local Python 3.12 verification on 2026-10-01 reproduced 200 passing tests at 91.20% statement coverage; CI now enforces a 90% floor.
 
 ## Repository
 
@@ -30,8 +30,8 @@ An ingestion-boundary screening pipeline combining statistical outlier methods w
 
 Current-main Python 3.12 verification reports:
 
-- **199 tests passed**, 0 skipped.
-- **90.88% statement coverage**; CI gate is 90%.
+- **200 tests passed**, 0 skipped.
+- **91.20% statement coverage**; CI gate is 90%.
 - Ruff check/format and Pyright pass on the final branch; GitHub currently reports 0 open Code Scanning, Dependabot, and secret-scanning alerts.
 - Committed `results/spectral_benchmark.json` records cross-class centroid F1:
   - **0.55** at 5% contamination
@@ -52,10 +52,10 @@ Current-main Python 3.12 verification reports:
 ```bash
 git clone https://github.com/poojakira/dataset-poisoning-detector.git
 cd dataset-poisoning-detector
-git checkout 258a4646abcc66bed2c9ccb538fa2f593140e750
+git checkout 43313ee7dab746a27999e22796074e4a0d941322
 python -m pip install -e ".[dev,realtime,kafka]"
 pytest tests/ -q --cov=poison_detector --cov-report=term
 python benchmark/cifar10_label_flip_benchmark.py
 ```
 
-Expected current evidence: **199 passed**, **90.88% coverage**.
+Expected current evidence: **200 passed**, **91.20% coverage**.

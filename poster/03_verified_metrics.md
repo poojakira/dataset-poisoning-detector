@@ -5,8 +5,8 @@
 
 | Metric | Current value |
 |---|---:|
-| Tests passed | **199** |
-| Statement coverage | **90.88%** |
+| Tests passed | **200** |
+| Statement coverage | **91.20%** |
 | Cross-class F1 @ 5% poison | **0.55** |
 | Cross-class F1 @ 10% poison | **0.595** |
 | Cross-class F1 @ 20% poison | **0.6975** |
