@@ -1,13 +1,13 @@
 # Reproduce the Work - Poster 04
 
 **Repository:** `github.com/poojakira/dataset-poisoning-detector`
-**Verified code snapshot:** `258a4646abcc66bed2c9ccb538fa2f593140e750`
-**Verification:** Local Python 3.12 reproduction on 2026-10-01; CI coverage floor is 90%.
+**Verified code snapshot:** `43313ee7dab746a27999e22796074e4a0d941322`
+**Verification:** GitHub Actions Python 3.12 verification on 2026-10-04, run `37169444656`; CI coverage floor is 90%.
 
 ```bash
 git clone https://github.com/poojakira/dataset-poisoning-detector.git
 cd dataset-poisoning-detector
-git checkout 258a4646abcc66bed2c9ccb538fa2f593140e750
+git checkout 43313ee7dab746a27999e22796074e4a0d941322
 python -m pip install -e ".[dev,realtime,kafka]"
 pytest tests/ -q --cov=poison_detector --cov-report=term
 python benchmark/cifar10_label_flip_benchmark.py
