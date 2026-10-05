@@ -589,3 +589,7 @@ Set your own `API_KEY`, trusted `POISON_BASELINE_PATH`, and deployment settings.
 
 This repository separates **implementation evidence**, **public/external interoperability checks**, and **real deployment or customer evidence**. See [PRODUCT_VALIDATION.md](PRODUCT_VALIDATION.md) for the current validation ladder, reproducible checks, and the claims that are deliberately out of scope. A passing test or public-data canary is not presented as customer adoption or universal production efficacy.
 
+
+## Application Security Assessment
+
+A bounded, maintainer-authorized API security assessment is documented in [`docs/APPSEC_ASSESSMENT_2026-10-05.md`](docs/APPSEC_ASSESSMENT_2026-10-05.md). It exercises authentication, request-size limits, validation redaction, WebSocket authorization, baseline readiness, concurrency limits, and dataset URL origin restrictions using committed regression tests. This is repository evidence, not a third-party penetration-test certification.
