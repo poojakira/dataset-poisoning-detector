@@ -1,6 +1,6 @@
 # Claim Ledger - Poster 04
 
-> Verified code snapshot: `258a4646abcc66bed2c9ccb538fa2f593140e750`; local Python 3.12 verification on 2026-10-01, with CI coverage floor set to 90%.
+> Verified code snapshot: `43313ee7dab746a27999e22796074e4a0d941322`; GitHub Actions Python 3.12 verification on 2026-10-04, CI run `37169444656`; coverage floor 90%.
 
 | # | Claim | Classification | Evidence |
 |---|---|---|---|

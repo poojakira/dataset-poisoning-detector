@@ -1,6 +1,6 @@
 # Research Brief - Poster 04
 
-> Evidence status: Refreshed against final main code snapshot `43313ee7dab746a27999e22796074e4a0d941322`. Local Python 3.12 verification on 2026-10-01 reproduced 200 passing tests at 91.20% statement coverage; CI now enforces a 90% floor.
+> Evidence status: Refreshed against final main code snapshot `43313ee7dab746a27999e22796074e4a0d941322`. GitHub Actions Python 3.12 verification on 2026-10-04 reproduced 200 passing tests at 91.20% statement coverage; CI now enforces a 90% floor.
 
 ## Repository
 
