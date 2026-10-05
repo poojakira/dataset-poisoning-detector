@@ -3,7 +3,7 @@
 **Target:** Dataset Poisoning Detector API  
 **Authorization:** Maintainer-owned repository and test environment  
 **Method:** Source-informed adversarial regression testing in GitHub Actions  
-**Status:** Assessment workflow created; record the final run result below after CI completes.
+**Status:** Pending rerun; an earlier queued GitHub Actions job was canceled before the assessment tests executed, so no result is claimed from that attempt.
 
 ## Scope
 
@@ -39,7 +39,7 @@ These controls are implementation evidence, not proof that every deployment is s
 
 ## Result
 
-Pending the dedicated GitHub Actions run on this assessment branch.
+Pending a completed dedicated GitHub Actions run. A canceled-before-execution job is not counted as assessment evidence.
 
 ## Claim boundary
 
