@@ -47,6 +47,22 @@ Existing tests directly exercise the public security boundary:
 
 The current repository verification records **200 passing tests at 91.20% statement coverage**. This assessment does not reinterpret that figure as penetration-test coverage.
 
+## Focused GitHub Actions evidence
+
+A dedicated, read-only **Focused AppSec Regression** rerun completed successfully:
+
+- Workflow run: `37369286581`, attempt 2
+- Tested PR head: `a80a0d9391987f4614a7c3bcc2c0b33592521627`
+- Python: 3.12
+- Result: **56 passed in 3.81s**
+- Selected files:
+  - `tests/test_api_security_hardening.py`
+  - `tests/test_api.py`
+  - `tests/test_input_validation.py`
+  - `tests/test_dataset_url_scanner.py`
+
+The run emitted one framework deprecation warning from the FastAPI/Starlette test stack; it did not fail the selected security tests. This focused 56-test result is separate from the repository-wide **200-test / 91.20% coverage** evidence and must not be presented as penetration-test coverage.
+
 ## Findings
 
 ### APPSEC-DATA-01 — Shared authenticated trust domain
