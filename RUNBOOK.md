@@ -116,7 +116,7 @@ pytest -q
 ```
 
 Current local baseline with the CI extras installed (`pip install -e ".[dev,realtime,kafka]"`,
-Python 3.12, fresh `.venv`): **199 passed, 0 skipped** at **90.88% statement coverage**
+Python 3.12, fresh `.venv`): **200 passed, 0 skipped** at **91.20% statement coverage**
 (CI gate is `--cov-fail-under=90`). With only the base `[dev]` extra, some
 streaming/API tests are skipped and coverage is lower; install the full extras to
 match CI. These are local results; re-check the current GitHub Actions run before
