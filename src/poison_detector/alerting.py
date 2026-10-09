@@ -116,6 +116,7 @@ def _send_alert_json(
 
     raw = socket.create_connection((address, 443), timeout=10)
     context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     connection = HTTPSConnection(host, timeout=10, context=context)
     try:
         try:
