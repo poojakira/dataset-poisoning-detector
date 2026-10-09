@@ -94,7 +94,8 @@ def _send_alert_json(
     """
     parsed = urlsplit(_validate_http_url(url))
     host = parsed.hostname
-    assert host is not None  # guaranteed by URL validation above
+    if host is None:
+        raise ValueError("missing destination hostname")
     if host not in allowed_hosts:
         raise ValueError("destination hostname is not explicitly allowlisted")
 
@@ -114,10 +115,11 @@ def _send_alert_json(
     request_headers = {"Content-Type": "application/json", **extra}
 
     raw = socket.create_connection((address, 443), timeout=10)
-    connection = HTTPSConnection(host, timeout=10, context=ssl.create_default_context())
+    context = ssl.create_default_context()
+    connection = HTTPSConnection(host, timeout=10, context=context)
     try:
         try:
-            connection.sock = connection._context.wrap_socket(raw, server_hostname=host)
+            connection.sock = context.wrap_socket(raw, server_hostname=host)
         except Exception:
             raw.close()
             raise
