@@ -6,8 +6,8 @@ with deduplication to prevent alert storms and escalation logic that increases
 severity based on duration and persistence.
 
 Threat Model Assumptions:
-    - Alert channels are trusted infrastructure. Webhook URLs point to internal
-      services (Slack, PagerDuty) controlled by the same organization.
+    - Alert configuration is trusted operator input. HTTP channels deliver only
+      to approved public HTTPS hosts; private network webhooks are not supported.
     - An attacker who can suppress alerts (by causing deduplication to swallow
       critical events) gains a window to inject poison undetected. The escalation
       system counters this by escalating sustained anomalies regardless of
@@ -24,8 +24,8 @@ Honest Limitations:
       acceptable -- better to over-alert on restart than miss events.
     - Clock skew between detector instances can cause inconsistent escalation
       timing. Use NTP-synchronized clocks in production.
-    - This module is synchronous by default (uses requests-style HTTP calls
-      in a thread pool). For high-throughput async usage, wrap in asyncio.
+    - This module makes synchronous HTTPS calls on the caller's thread.
+      For async usage, move dispatch off the event loop with asyncio.to_thread.
 
 Security Notes:
     - Webhook URLs and API keys must come from environment variables or
@@ -47,7 +47,7 @@ import ssl
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from http.client import HTTPSConnection
+from http.client import HTTPException, HTTPSConnection
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
@@ -112,12 +112,14 @@ def _send_alert_json(
     extra = headers or {}
     if any(key.lower() in {"host", "content-length", "transfer-encoding"} for key in extra):
         raise ValueError("forbidden webhook header")
+    if any("\r" in item or "\n" in item for pair in extra.items() for item in pair):
+        raise ValueError("webhook headers must not contain newlines")
     request_headers = {"Content-Type": "application/json", **extra}
 
-    raw = socket.create_connection((address, 443), timeout=10)
     context = ssl.create_default_context()
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     connection = HTTPSConnection(host, timeout=10, context=context)
+    raw = socket.create_connection((address, 443), timeout=10)
     try:
         try:
             connection.sock = context.wrap_socket(raw, server_hostname=host)
@@ -263,7 +265,7 @@ class SlackChannel:
         """POST JSON payload to URL."""
         try:
             return _send_alert_json(url, payload, allowed_hosts={"hooks.slack.com"}) == 200
-        except (OSError, ValueError, ssl.SSLError) as exc:
+        except (OSError, ValueError, HTTPException) as exc:
             logger.warning("Slack delivery failed (%s)", type(exc).__name__)
             return False
 
@@ -322,7 +324,7 @@ class PagerDutyChannel:
         try:
             status = _send_alert_json(url, payload, allowed_hosts={"events.pagerduty.com"})
             return 200 <= status < 300
-        except (OSError, ValueError, ssl.SSLError) as exc:
+        except (OSError, ValueError, HTTPException) as exc:
             logger.warning("PagerDuty delivery failed (%s)", type(exc).__name__)
             return False
 
@@ -383,7 +385,7 @@ class CloudWatchChannel:
 
 
 class WebhookChannel:
-    """Generic HTTP webhook channel for custom integrations.
+    """Generic public HTTPS webhook channel for approved custom integrations.
 
     POSTs a JSON payload to a configurable URL. Supports custom headers
     for authentication.
@@ -401,7 +403,7 @@ class WebhookChannel:
         self._allowed_hosts = {name.strip().lower() for name in hosts.split(",") if name.strip()}
         if urlsplit(self._url).hostname not in self._allowed_hosts:
             raise ValueError("configure POISON_ALERT_WEBHOOK_HOSTS to permit a custom webhook")
-        self._headers = headers or {}
+        self._headers = dict(headers or {})
 
     def send(self, alert: Alert) -> bool:
         """Send alert to webhook endpoint.
@@ -427,7 +429,7 @@ class WebhookChannel:
                 self._url, payload, allowed_hosts=self._allowed_hosts, headers=self._headers
             )
             return 200 <= status < 300
-        except (OSError, ValueError, ssl.SSLError) as exc:
+        except (OSError, ValueError, HTTPException) as exc:
             logger.warning("Webhook delivery failed (%s)", type(exc).__name__)
             return False
 

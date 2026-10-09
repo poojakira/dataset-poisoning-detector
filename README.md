@@ -7,7 +7,7 @@
 
 > Technical research poster (36 x 48 in). Click the image for the print-resolution **[PDF](poster/poster_36x48.pdf)**.
 > Poster measurements are dated snapshots at their printed commits. Use the repository evidence files for newer results; do not read the poster as a verification of the latest `main`.
-> Every metric on it is evidence-backed; historical/projected numbers are labeled and separated from current results.
+> The poster preserves its dated measurements. Test totals include legacy stub-only demonstrations; see [current validation boundaries](docs/verification-2026-10-09.md).
 <!-- security-systems-poster -->
 
 # Dataset Poisoning Detector
@@ -15,7 +15,7 @@
 > Statistical + spectral screening for poisoned ML training data at the ingestion boundary — honest about what feature-space methods can and cannot catch.
 
 [![CI](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml/badge.svg)](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-200%20passing-brightgreen)](RUNBOOK.md)
+[![Tests](https://img.shields.io/badge/production_tests-186%20passing-brightgreen)](docs/verification-2026-10-09.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira))
@@ -26,12 +26,12 @@
 
 ## Verified Snapshot
 
-Reproduced on current `main` with the `[dev,realtime,kafka]` extras (Python 3.12). Label-flip F1 is transcribed from the committed `results/spectral_benchmark.json`.
+Local remediation verification on Python 3.12.14 on 2026-10-09, based on main `e98bcff7bc252e6334bc6e27bedf3bd57ba21cfb` plus PR 83 and the follow-up fixes. This is not a claim that the new branch has passed remote CI. Legacy stub-only tests are excluded from the production-facing count; see [commands and limitations](docs/verification-2026-10-09.md). Label-flip F1 is transcribed from the committed `results/spectral_benchmark.json` and was not rerun during this verification.
 
-| Metric | Current verified result |
+| Metric | Dated verified result |
 |---|---:|
-| Tests | 200 passing, 0 skipped |
-| Statement coverage | 91.20% (CI gate 90%) |
+| Production-facing tests | 186 passing, 0 skipped (226 including 40 legacy stub tests) |
+| Statement coverage | 91.7512% (2080/2267 statements; CI gate 90%) |
 | Detection methods | z-score, IQR, Isolation Forest, ensemble, spectral top-1, cross-class centroid, streaming |
 | Cross-class label-flip F1 | 0.55 / 0.60 / 0.70 @ 5% / 10% / 20% poison |
 | Feature-space ensemble (CIFAR-10 raw pixels) | AUC ~0.53–0.56 (near-random — documented limitation) |
@@ -458,7 +458,7 @@ The engineering value of this project is primarily in the streaming infrastructu
 | Quarantine storage | Yes | Redis (streaming) + SQLite (batch) |
 
 > **Storage boundary:** `PostgresStore` is a deliberate stub and raises `NotImplementedError`; PostgreSQL quarantine persistence is **not implemented or supported** in the current repository. Supported paths are Redis for streaming quarantine and SQLite for batch/local storage.
-| Test coverage | Yes | current verification: 200 tests passing (0 skipped) with the `[dev,realtime,kafka]` extras, covering all components incl. input-validation hardening |
+| Test coverage | Yes | Local 2026-10-09 Python 3.12 verification: 186 production-facing tests passing, 0 skipped; 226 including 40 legacy stub-only demonstrations. Coverage is 91.7512%; this does not certify every component or deployment. |
 | CI/CD | Yes | GitHub Actions (`.github/` directory) |
 | Runbook | Yes | `RUNBOOK.md` with operational procedures |
 | Changelog | Yes | `CHANGELOG.md` with version history |

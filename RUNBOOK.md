@@ -115,18 +115,25 @@ The streaming number is a **no-refit microbenchmark**. It excludes periodic Isol
 pytest -q
 ```
 
-Current local baseline with the CI extras installed (`pip install -e ".[dev,realtime,kafka]"`,
+Historical 2026-10-04 local baseline with the CI extras installed (`pip install -e ".[dev,realtime,kafka]"`,
 Python 3.12, fresh `.venv`): **200 passed, 0 skipped** at **91.20% statement coverage**
 (CI gate is `--cov-fail-under=90`). With only the base `[dev]` extra, some
 streaming/API tests are skipped and coverage is lower; install the full extras to
 match CI. These are local results; re-check the current GitHub Actions run before
 copying these numbers into external material.
 
+The newer local 2026-10-09 verification passed 226 tests, including 40 tests of
+legacy local stub classes in `tests/test_coverage_boost.py`. Excluding that file
+passed **186 production-facing tests** with **91.7512%** statement coverage
+(2080 of 2267 statements). Use [the dated verification record](docs/verification-2026-10-09.md)
+for commands, dependencies, network guard, and limitations. The older 200-test
+total must not be represented as a current production-facing test count.
+
 ## Lint / Format / Security
 
 ```bash
-ruff check src tests            # ruff 0.8.4 -> "All checks passed!"
-ruff format --check src tests   # -> "37 files already formatted"
+ruff check .                   # ruff 0.8.4
+ruff format --check .           # includes poster and helper scripts
 python -m pip install --upgrade pip
 pip-audit                       # -> "No known vulnerabilities found"
 ```
