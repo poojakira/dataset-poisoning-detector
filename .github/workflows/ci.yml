@@ -50,9 +50,9 @@ jobs:
           pip install -e ".[dev,realtime,kafka]"
           pip install boto3
 
-      - run: ruff check src/poison_detector tests --output-format=github
+      - run: ruff check src/poison_detector tests scripts/make_labelflip_cifar.py --output-format=github
 
-      - run: ruff format --check src/poison_detector tests
+      - run: ruff format --check src/poison_detector tests scripts/make_labelflip_cifar.py
 
       - run: pyright src/poison_detector tests
 
