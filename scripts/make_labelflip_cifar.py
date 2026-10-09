@@ -167,6 +167,9 @@ def build_labelflip_groups(
     else:
         n_poison_per_class = int(round(flip_rate / (1.0 - flip_rate) * n_clean_per_class))
 
+    # Track every source row across both clean and flipped assignments.
+    used: set[int] = set()
+
     # First pass: assign clean members per class (disjoint)
     clean_idx_by_class = {}
     for c in range(NUM_CLASSES):
