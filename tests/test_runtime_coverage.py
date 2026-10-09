@@ -235,6 +235,7 @@ def test_alert_url_validation_and_payload_delivery(monkeypatch):
     slack = SlackChannel("https://hooks.slack.com/services/mock", channel="#security")
     assert not slack.send(alert)  # Slack requires status == 200; fake response is 204.
 
+
 def test_alert_dispatch_dedup_escalation_and_channel_failure(monkeypatch):
     now = [100.0]
     monkeypatch.setattr("poison_detector.alerting.time.time", lambda: now[0])
