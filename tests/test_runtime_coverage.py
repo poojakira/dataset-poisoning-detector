@@ -209,24 +209,17 @@ def test_alert_url_validation_and_payload_delivery(monkeypatch):
         with pytest.raises(ValueError):
             _validate_http_url(bad)
 
-    class _Resp:
-        status = 204
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
-            return False
-
     captured = {}
 
-    def fake_urlopen(req, timeout):
-        captured["url"] = req.full_url
-        captured["data"] = json.loads(req.data.decode("utf-8"))
-        captured["timeout"] = timeout
-        return _Resp()
+    def fake_send(url, payload, *, allowed_hosts, headers=None):
+        captured["url"] = url
+        captured["data"] = payload
+        captured["hosts"] = allowed_hosts
+        captured["headers"] = headers
+        return 204
 
-    monkeypatch.setattr("poison_detector.alerting.urlopen", fake_urlopen)
+    monkeypatch.setenv("POISON_ALERT_WEBHOOK_HOSTS", "example.com")
+    monkeypatch.setattr("poison_detector.alerting._send_alert_json", fake_send)
     alert = Alert(
         AlertType.SYSTEM_ERROR,
         AlertSeverity.CRITICAL,
@@ -237,10 +230,10 @@ def test_alert_url_validation_and_payload_delivery(monkeypatch):
     webhook = WebhookChannel("https://example.com/hook", {"Authorization": "Bearer test"})
     assert webhook.send(alert)
     assert captured["data"]["severity"] == "critical"
+    assert captured["hosts"] == {"example.com"}
 
-    slack = SlackChannel("https://example.com/slack", channel="#security")
+    slack = SlackChannel("https://hooks.slack.com/services/mock", channel="#security")
     assert not slack.send(alert)  # Slack requires status == 200; fake response is 204.
-
 
 def test_alert_dispatch_dedup_escalation_and_channel_failure(monkeypatch):
     now = [100.0]
