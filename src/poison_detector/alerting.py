@@ -6,8 +6,8 @@ with deduplication to prevent alert storms and escalation logic that increases
 severity based on duration and persistence.
 
 Threat Model Assumptions:
-    - Alert channels are trusted infrastructure. Webhook URLs point to internal
-      services (Slack, PagerDuty) controlled by the same organization.
+    - Alert configuration is trusted operator input. HTTP channels deliver only
+      to approved public HTTPS hosts; private network webhooks are not supported.
     - An attacker who can suppress alerts (by causing deduplication to swallow
       critical events) gains a window to inject poison undetected. The escalation
       system counters this by escalating sustained anomalies regardless of
@@ -24,8 +24,8 @@ Honest Limitations:
       acceptable -- better to over-alert on restart than miss events.
     - Clock skew between detector instances can cause inconsistent escalation
       timing. Use NTP-synchronized clocks in production.
-    - This module is synchronous by default (uses requests-style HTTP calls
-      in a thread pool). For high-throughput async usage, wrap in asyncio.
+    - This module makes synchronous HTTPS calls on the caller's thread.
+      For async usage, move dispatch off the event loop with asyncio.to_thread.
 
 Security Notes:
     - Webhook URLs and API keys must come from environment variables or
@@ -38,27 +38,104 @@ Security Notes:
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
+import os
+import socket
+import ssl
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from http.client import HTTPException, HTTPSConnection
 from typing import Any, Protocol
-from urllib.request import Request, urlopen
-from urllib.error import URLError
 from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
 
 def _validate_http_url(url: str) -> str:
-    """Require an absolute HTTP(S) URL without embedded credentials."""
-    parsed = urlsplit(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise ValueError("alert destination must be an absolute HTTP(S) URL")
-    if parsed.username is not None or parsed.password is not None:
-        raise ValueError("alert destination must not contain URL credentials")
+    """Validate HTTPS structure without making network calls."""
+    try:
+        parsed = urlsplit(url)
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("invalid alert destination URL") from exc
+    if parsed.scheme != "https" or not hostname or port not in (None, 443):
+        raise ValueError("alert destinations require HTTPS on port 443")
+    if (
+        parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+        or hostname.endswith(".")
+    ):
+        raise ValueError("alert destination has forbidden URL components")
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("webhook destinations must use an allowlisted DNS hostname")
     return url
+
+
+def _send_alert_json(
+    url: str,
+    payload: dict[str, Any],
+    *,
+    allowed_hosts: set[str],
+    headers: dict[str, str] | None = None,
+) -> int:
+    """Post JSON using a verified public IP pinned to an authenticated TLS session.
+
+    No redirects, HTTP downgrade, proxies, private or metadata IPs. Any DNS
+    response containing a non-global address is rejected in its entirety.
+    """
+    parsed = urlsplit(_validate_http_url(url))
+    host = parsed.hostname
+    if host is None:
+        raise ValueError("missing destination hostname")
+    if host not in allowed_hosts:
+        raise ValueError("destination hostname is not explicitly allowlisted")
+
+    addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+    if not addresses:
+        raise ValueError("no destination addresses resolved")
+    if any(not ipaddress.ip_address(item[4][0]).is_global for item in addresses):
+        raise ValueError("destination resolves to a non-public IP address")
+    address = addresses[0][4][0]
+
+    data = json.dumps(payload).encode("utf-8")
+    if len(data) > 65536:
+        raise ValueError("alert payload exceeds 64 KiB")
+    extra = headers or {}
+    if any(key.lower() in {"host", "content-length", "transfer-encoding"} for key in extra):
+        raise ValueError("forbidden webhook header")
+    if any("\r" in item or "\n" in item for pair in extra.items() for item in pair):
+        raise ValueError("webhook headers must not contain newlines")
+    request_headers = {"Content-Type": "application/json", **extra}
+
+    context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    connection = HTTPSConnection(host, timeout=10, context=context)
+    raw = socket.create_connection((address, 443), timeout=10)
+    try:
+        try:
+            connection.sock = context.wrap_socket(raw, server_hostname=host)
+        except Exception:
+            raw.close()
+            raise
+        target = parsed.path or "/"
+        if parsed.query:
+            target += "?" + parsed.query
+        connection.request("POST", target, body=data, headers=request_headers)
+        response = connection.getresponse()
+        if len(response.read(65537)) > 65536:
+            raise ValueError("alert response exceeds 64 KiB")
+        return response.status
+    finally:
+        connection.close()
 
 
 class AlertSeverity(Enum):
@@ -143,6 +220,8 @@ class SlackChannel:
             channel: Override channel (empty uses webhook default).
         """
         self._webhook_url = _validate_http_url(webhook_url)
+        if urlsplit(self._webhook_url).hostname != "hooks.slack.com":
+            raise ValueError("Slack webhook host must be hooks.slack.com")
         self._channel = channel
 
     def send(self, alert: Alert) -> bool:
@@ -185,12 +264,9 @@ class SlackChannel:
     def _post_json(url: str, payload: dict[str, Any]) -> bool:
         """POST JSON payload to URL."""
         try:
-            data = json.dumps(payload).encode("utf-8")
-            req = Request(url, data=data, headers={"Content-Type": "application/json"})
-            with urlopen(req, timeout=10) as resp:
-                return resp.status == 200
-        except (URLError, OSError, ValueError) as e:
-            logger.warning(f"Slack delivery failed: {e}")
+            return _send_alert_json(url, payload, allowed_hosts={"hooks.slack.com"}) == 200
+        except (OSError, ValueError, HTTPException) as exc:
+            logger.warning("Slack delivery failed (%s)", type(exc).__name__)
             return False
 
 
@@ -246,12 +322,10 @@ class PagerDutyChannel:
     def _post_json(url: str, payload: dict[str, Any]) -> bool:
         """POST JSON payload to URL."""
         try:
-            data = json.dumps(payload).encode("utf-8")
-            req = Request(url, data=data, headers={"Content-Type": "application/json"})
-            with urlopen(req, timeout=10) as resp:
-                return 200 <= resp.status < 300
-        except (URLError, OSError, ValueError) as e:
-            logger.warning(f"PagerDuty delivery failed: {e}")
+            status = _send_alert_json(url, payload, allowed_hosts={"events.pagerduty.com"})
+            return 200 <= status < 300
+        except (OSError, ValueError, HTTPException) as exc:
+            logger.warning("PagerDuty delivery failed (%s)", type(exc).__name__)
             return False
 
 
@@ -311,7 +385,7 @@ class CloudWatchChannel:
 
 
 class WebhookChannel:
-    """Generic HTTP webhook channel for custom integrations.
+    """Generic public HTTPS webhook channel for approved custom integrations.
 
     POSTs a JSON payload to a configurable URL. Supports custom headers
     for authentication.
@@ -325,7 +399,11 @@ class WebhookChannel:
             headers: Additional HTTP headers (e.g., Authorization).
         """
         self._url = _validate_http_url(url)
-        self._headers = headers or {}
+        hosts = os.environ.get("POISON_ALERT_WEBHOOK_HOSTS", "")
+        self._allowed_hosts = {name.strip().lower() for name in hosts.split(",") if name.strip()}
+        if urlsplit(self._url).hostname not in self._allowed_hosts:
+            raise ValueError("configure POISON_ALERT_WEBHOOK_HOSTS to permit a custom webhook")
+        self._headers = dict(headers or {})
 
     def send(self, alert: Alert) -> bool:
         """Send alert to webhook endpoint.
@@ -347,13 +425,12 @@ class WebhookChannel:
         }
 
         try:
-            data = json.dumps(payload).encode("utf-8")
-            headers = {"Content-Type": "application/json", **self._headers}
-            req = Request(self._url, data=data, headers=headers)
-            with urlopen(req, timeout=10) as resp:
-                return 200 <= resp.status < 300
-        except (URLError, OSError, ValueError) as e:
-            logger.warning(f"Webhook delivery failed: {e}")
+            status = _send_alert_json(
+                self._url, payload, allowed_hosts=self._allowed_hosts, headers=self._headers
+            )
+            return 200 <= status < 300
+        except (OSError, ValueError, HTTPException) as exc:
+            logger.warning("Webhook delivery failed (%s)", type(exc).__name__)
             return False
 
 

@@ -218,7 +218,9 @@ def main():
         spectral_metrics["time_seconds"] = round(spectral_time, 3)
 
         # Also record IQR-based spectral for comparison
-        spectral_baseline_metrics = evaluate_detection(spectral_baseline_flagged, poisoned_indices, len(y_clean))
+        spectral_baseline_metrics = evaluate_detection(
+            spectral_baseline_flagged, poisoned_indices, len(y_clean)
+        )
 
         print(
             f"      Spectral (cross-class): P={spectral_metrics['precision']:.2f}  R={spectral_metrics['recall']:.2f}  F1={spectral_metrics['f1']:.2f}  ({spectral_metrics['flagged']} flagged)"

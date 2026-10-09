@@ -1,19 +1,34 @@
 from __future__ import annotations
 from pathlib import Path
-import html, os, re, shutil, subprocess, sys
+import html
+import os
+import re
+import shutil
+import subprocess
+import sys
 
 repo = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]).resolve()
 poster = repo / "poster"
 brief = poster / "01_research_brief.md"
 metrics_path = poster / "03_verified_metrics.md"
 text = brief.read_text(encoding="utf-8", errors="replace")
-metrics_text = metrics_path.read_text(encoding="utf-8", errors="replace") if metrics_path.exists() else ""
+metrics_text = (
+    metrics_path.read_text(encoding="utf-8", errors="replace") if metrics_path.exists() else ""
+)
+
 
 def clean(s: str) -> str:
     s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
-    s = s.replace("**","").replace("`","").replace("\u2014","-").replace("\u2013","-").replace("\u2192","->")
+    s = (
+        s.replace("**", "")
+        .replace("`", "")
+        .replace("\u2014", "-")
+        .replace("\u2013", "-")
+        .replace("\u2192", "->")
+    )
     s = s.replace("\ufffd", "")
     return re.sub(r"\s+", " ", s).strip()
+
 
 def sec(*names: str) -> str:
     for name in names:
@@ -22,95 +37,129 @@ def sec(*names: str) -> str:
             return m.group(1).strip()
     return ""
 
+
 def items(block: str) -> list[str]:
-    out=[]
+    out = []
     for line in block.splitlines():
-        m=re.match(r"^\s*(?:[-*]|\d+\.)\s+(.*)", line)
+        m = re.match(r"^\s*(?:[-*]|\d+\.)\s+(.*)", line)
         if m:
-            v=clean(m.group(1))
+            v = clean(m.group(1))
             if v:
                 out.append(v)
     return out
 
+
 def strip_fences(s: str) -> str:
-    s=re.sub(r"(?ms)\`\`\`.*?\`\`\`", "", s)
+    s = re.sub(r"(?ms)\`\`\`.*?\`\`\`", "", s)
     return clean(s)
+
 
 def esc(s: str) -> str:
     return html.escape(s, quote=True)
 
-title = clean(sec("Academic Project Title","Project Title")) or repo.name.replace("-"," ").title()
+
+title = clean(sec("Academic Project Title", "Project Title")) or repo.name.replace("-", " ").title()
 subtitle = clean(sec("Subtitle"))
-contribution = clean(sec("One-Sentence Contribution","Contribution","Research Contribution"))
-methods = items(sec("Method","Methodology"))[:6]
-evidence = items(sec("Current Verified Evidence","Verified Evidence","Evidence at Poster Snapshot + Claim Ledger"))[:7]
-limits = items(sec("Honest Boundaries","Limitations","Limitations & Residual Risk","Not established by this repository"))[:6]
+contribution = clean(sec("One-Sentence Contribution", "Contribution", "Research Contribution"))
+methods = items(sec("Method", "Methodology"))[:6]
+evidence = items(
+    sec(
+        "Current Verified Evidence",
+        "Verified Evidence",
+        "Evidence at Poster Snapshot + Claim Ledger",
+    )
+)[:7]
+limits = items(
+    sec(
+        "Honest Boundaries",
+        "Limitations",
+        "Limitations & Residual Risk",
+        "Not established by this repository",
+    )
+)[:6]
 repro_block = sec("Reproducibility")
 repro = strip_fences(repro_block)[:900]
-repository = clean(sec("Repository")) or f"github.com/poojakira/{repo.name.replace('_readonly_','')}"
+repository = (
+    clean(sec("Repository")) or f"github.com/poojakira/{repo.name.replace('_readonly_','')}"
+)
 
-metrics=[]
-headline_match=re.search(r"(?ms)^##+\s+Headline cards\s*$\n(.*?)(?=^##+\s+|\Z)", metrics_text)
+metrics = []
+headline_match = re.search(r"(?ms)^##+\s+Headline cards\s*$\n(.*?)(?=^##+\s+|\Z)", metrics_text)
 if headline_match:
     for line in headline_match.group(1).splitlines():
-        m=re.match(r"^\s*[-*]\s+(.+?)\s+(?:\u2014|\u2013|-)\s+(.+?)\s*$", line)
+        m = re.match(r"^\s*[-*]\s+(.+?)\s+(?:\u2014|\u2013|-)\s+(.+?)\s*$", line)
         if m:
-            value,label=clean(m.group(1)),clean(m.group(2))
+            value, label = clean(m.group(1)), clean(m.group(2))
             if value and label:
-                metrics.append((label,value))
+                metrics.append((label, value))
 for line in metrics_text.splitlines():
     if not line.strip().startswith("|") or "---" in line:
         continue
-    cells=[clean(c) for c in line.strip().strip("|").split("|")]
-    if len(cells)<2:
+    cells = [clean(c) for c in line.strip().strip("|").split("|")]
+    if len(cells) < 2:
         continue
-    k,v=cells[0],cells[1]
-    if k.lower() in {"metric","current value","value","item","claim","series"}:
+    k, v = cells[0], cells[1]
+    if k.lower() in {"metric", "current value", "value", "item", "claim", "series"}:
         continue
-    if not k or not v or (k,v) in metrics:
+    if not k or not v or (k, v) in metrics:
         continue
-    metrics.append((k,v))
+    metrics.append((k, v))
 
-primary_metrics=metrics[:4]
-extra_metrics=metrics[4:]
+primary_metrics = metrics[:4]
+extra_metrics = metrics[4:]
 if extra_metrics:
-    evidence=([f"{k}: {v}" for k,v in extra_metrics] + evidence)[:10]
+    evidence = ([f"{k}: {v}" for k, v in extra_metrics] + evidence)[:10]
 if not methods:
-    methods=["Inspect the trust boundary","Apply repository-specific security checks","Record reproducible evidence"]
+    methods = [
+        "Inspect the trust boundary",
+        "Apply repository-specific security checks",
+        "Record reproducible evidence",
+    ]
 if not evidence:
-    evidence=["See README, verified metrics, tests, and CI for the current evidence snapshot."]
+    evidence = ["See README, verified metrics, tests, and CI for the current evidence snapshot."]
 if not limits:
-    limits=["No additional limitation text was found in the research brief. Consult the README before generalizing results."]
+    limits = [
+        "No additional limitation text was found in the research brief. Consult the README before generalizing results."
+    ]
 if not repro:
-    repro="Clone the repository, check out the cited evidence snapshot, install documented dependencies, and run the verification commands in the README."
+    repro = "Clone the repository, check out the cited evidence snapshot, install documented dependencies, and run the verification commands in the README."
+
 
 def bullets(xs: list[str], cls="") -> str:
-    return '<ul class="'+cls+'">' + "".join("<li>"+esc(x)+"</li>" for x in xs) + "</ul>"
+    return '<ul class="' + cls + '">' + "".join("<li>" + esc(x) + "</li>" for x in xs) + "</ul>"
+
 
 def title_class(s: str) -> str:
-    if len(s) > 85: return "title xlong"
-    if len(s) > 64: return "title long"
+    if len(s) > 85:
+        return "title xlong"
+    if len(s) > 64:
+        return "title long"
     return "title"
 
-metric_cards=""
-for k,v in primary_metrics:
-    vc="metric-value"
-    if len(v)>22: vc+=" tiny"
-    elif len(v)>14: vc+=" small"
+
+metric_cards = ""
+for k, v in primary_metrics:
+    vc = "metric-value"
+    if len(v) > 22:
+        vc += " tiny"
+    elif len(v) > 14:
+        vc += " small"
     metric_cards += f'<div class="metric"><div class="{vc}">{esc(v)}</div><div class="metric-label">{esc(k)}</div></div>'
 if not metric_cards:
-    metric_cards='<div class="metric"><div class="metric-value">Verified</div><div class="metric-label">Repository evidence</div></div>'
+    metric_cards = '<div class="metric"><div class="metric-value">Verified</div><div class="metric-label">Repository evidence</div></div>'
 
-flow_nodes=""
-for i,m in enumerate(methods,1):
-    flow_nodes += f'<div class="flow-node"><div class="flow-index">{i:02d}</div><div>{esc(m)}</div></div>'
+flow_nodes = ""
+for i, m in enumerate(methods, 1):
+    flow_nodes += (
+        f'<div class="flow-node"><div class="flow-index">{i:02d}</div><div>{esc(m)}</div></div>'
+    )
 
-method_rows=""
-for i,m in enumerate(methods,1):
+method_rows = ""
+for i, m in enumerate(methods, 1):
     method_rows += f'<div class="method-row"><span>{i:02d}</span><div>{esc(m)}</div></div>'
 
-evidence_chips=""
-for i,e in enumerate(evidence[:10],1):
+evidence_chips = ""
+for i, e in enumerate(evidence[:10], 1):
     evidence_chips += f'<div class="e-chip"><span>EV-{i:02d}</span><div>{esc(e)}</div></div>'
 
 css = r"""
@@ -186,52 +235,105 @@ html, body { margin:0; width:36in; height:48in; font-family:"Segoe UI",Arial,san
 """
 
 prov = [
-    ("Claim discipline","Metrics come from the repository's verified metrics and research brief."),
-    ("Scope discipline","Benchmarks are reported only at their documented fixture, dataset, or test scope."),
-    ("Reproduction","PDF and PNG are generated locally from committed evidence without paid services."),
+    ("Claim discipline", "Metrics come from the repository's verified metrics and research brief."),
+    (
+        "Scope discipline",
+        "Benchmarks are reported only at their documented fixture, dataset, or test scope.",
+    ),
+    (
+        "Reproduction",
+        "PDF and PNG are generated locally from committed evidence without paid services.",
+    ),
 ]
 
-doc='<!doctype html><html><head><meta charset="utf-8"><style>'+css+'</style></head><body><div class="poster">'
-doc+=f'<section class="hero"><div><div class="kicker">Security Engineering Research Poster</div><h1 class="{title_class(title)}">{esc(title)}</h1><div class="subtitle">{esc(subtitle)}</div><div class="repo">{esc(repository)}</div></div><div class="hero-side"><div class="label">Evidence posture</div><div class="value">Verified, scoped, reproducible</div><div class="note">Claims are constrained to the repository evidence snapshot and stated limitations.</div></div></section>'
-doc+='<section class="metrics">'+metric_cards+'</section>'
-doc+='<section class="arch"><div class="section-kicker">System view</div><h2>Architecture and Threat-Control Flow</h2><div class="arch-grid"><div class="boundary"><div class="boundary-title">Trust Boundary</div><div class="boundary-lanes"><div class="lane"><strong>Input surface</strong><p>Data, models, requests, policies, or artifacts entering the tested path.</p></div><div class="lane"><strong>Control surface</strong><p>Repository-specific validation, analysis, and fail-closed checks.</p></div><div class="lane"><strong>Evidence surface</strong><p>Findings, metrics, tests, logs, or reproducible artifacts.</p></div></div><div class="boundary-note">This diagram describes the tested repository path, not a universal deployment guarantee.</div></div><div class="flow">'+flow_nodes+'</div></div></section>'
-doc+='<section class="middle"><div><div class="panel contrib"><h2>Research Contribution</h2><p>'+esc(contribution or "Repository contribution documented in the research brief.")+'</p></div><div class="panel evidence-panel"><h2>Verified Evidence</h2><div class="evidence-grid">'+evidence_chips+'</div></div></div><div class="panel method-panel"><h2>Method and Control Path</h2>'+method_rows+'</div></section>'
-prov_html="".join(f'<div class="prov-card"><strong>{esc(a)}</strong><p>{esc(b)}</p></div>' for a,b in prov)
-doc+='<section class="lower"><div class="panel limits"><h2>Limitations and Residual Risk</h2>'+bullets(limits)+'</div><div class="panel repro"><h2>Reproducibility</h2><p>'+esc(repro)+'</p></div><div class="panel provenance"><h2>Evidence Provenance</h2>'+prov_html+'</div></section>'
-doc+='<footer class="footer"><div><h3>Evidence-backed security engineering</h3><p>README, verified metrics, tests, CI, and committed artifacts remain authoritative. Poster layout emphasizes architecture, controls, evidence, limitations, and reproduction rather than unsupported efficacy claims.</p></div><div class="badge">36 x 48 in<br>PDF + PNG parity</div></footer>'
-doc+='</div></body></html>'
+doc = (
+    '<!doctype html><html><head><meta charset="utf-8"><style>'
+    + css
+    + '</style></head><body><div class="poster">'
+)
+doc += f'<section class="hero"><div><div class="kicker">Security Engineering Research Poster</div><h1 class="{title_class(title)}">{esc(title)}</h1><div class="subtitle">{esc(subtitle)}</div><div class="repo">{esc(repository)}</div></div><div class="hero-side"><div class="label">Evidence posture</div><div class="value">Verified, scoped, reproducible</div><div class="note">Claims are constrained to the repository evidence snapshot and stated limitations.</div></div></section>'
+doc += '<section class="metrics">' + metric_cards + "</section>"
+doc += (
+    '<section class="arch"><div class="section-kicker">System view</div><h2>Architecture and Threat-Control Flow</h2><div class="arch-grid"><div class="boundary"><div class="boundary-title">Trust Boundary</div><div class="boundary-lanes"><div class="lane"><strong>Input surface</strong><p>Data, models, requests, policies, or artifacts entering the tested path.</p></div><div class="lane"><strong>Control surface</strong><p>Repository-specific validation, analysis, and fail-closed checks.</p></div><div class="lane"><strong>Evidence surface</strong><p>Findings, metrics, tests, logs, or reproducible artifacts.</p></div></div><div class="boundary-note">This diagram describes the tested repository path, not a universal deployment guarantee.</div></div><div class="flow">'
+    + flow_nodes
+    + "</div></div></section>"
+)
+doc += (
+    '<section class="middle"><div><div class="panel contrib"><h2>Research Contribution</h2><p>'
+    + esc(contribution or "Repository contribution documented in the research brief.")
+    + '</p></div><div class="panel evidence-panel"><h2>Verified Evidence</h2><div class="evidence-grid">'
+    + evidence_chips
+    + '</div></div></div><div class="panel method-panel"><h2>Method and Control Path</h2>'
+    + method_rows
+    + "</div></section>"
+)
+prov_html = "".join(
+    f'<div class="prov-card"><strong>{esc(a)}</strong><p>{esc(b)}</p></div>' for a, b in prov
+)
+doc += (
+    '<section class="lower"><div class="panel limits"><h2>Limitations and Residual Risk</h2>'
+    + bullets(limits)
+    + '</div><div class="panel repro"><h2>Reproducibility</h2><p>'
+    + esc(repro)
+    + '</p></div><div class="panel provenance"><h2>Evidence Provenance</h2>'
+    + prov_html
+    + "</div></section>"
+)
+doc += '<footer class="footer"><div><h3>Evidence-backed security engineering</h3><p>README, verified metrics, tests, CI, and committed artifacts remain authoritative. Poster layout emphasizes architecture, controls, evidence, limitations, and reproduction rather than unsupported efficacy claims.</p></div><div class="badge">36 x 48 in<br>PDF + PNG parity</div></footer>'
+doc += "</div></body></html>"
 
-html_path=poster/"_poster_render.html"
-html_path.write_text(doc,encoding="utf-8")
-browsers=[Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")]
+html_path = poster / "_poster_render.html"
+html_path.write_text(doc, encoding="utf-8")
+browsers = [
+    Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
+    Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+    Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+]
 browser_env = os.environ.get("POSTER_BROWSER")
 browser = Path(browser_env) if browser_env else None
 if browser is None:
-    system_candidates = [shutil.which(name) for name in ("google-chrome", "chromium", "chromium-browser", "microsoft-edge")]
+    system_candidates = [
+        shutil.which(name)
+        for name in ("google-chrome", "chromium", "chromium-browser", "microsoft-edge")
+    ]
     browser = next((Path(p) for p in system_candidates if p and Path(p).exists()), None)
 if browser is None:
     browser = next((p for p in browsers if p.exists()), None)
 if browser is None:
     raise SystemExit("browser not found")
-pdf=poster/"poster_36x48.pdf"
-png=poster/"poster.png"
-profile=poster/"_poster_profile"
-shutil.rmtree(profile,ignore_errors=True)
-subprocess.run([str(browser),"--headless=new","--disable-gpu",f"--user-data-dir={profile}","--no-pdf-header-footer",f"--print-to-pdf={pdf}",html_path.resolve().as_uri()],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+pdf = poster / "poster_36x48.pdf"
+png = poster / "poster.png"
+profile = poster / "_poster_profile"
+shutil.rmtree(profile, ignore_errors=True)
+subprocess.run(
+    [
+        str(browser),
+        "--headless=new",
+        "--disable-gpu",
+        f"--user-data-dir={profile}",
+        "--no-pdf-header-footer",
+        f"--print-to-pdf={pdf}",
+        html_path.resolve().as_uri(),
+    ],
+    check=True,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
 try:
     import fitz
 except Exception as exc:
     raise SystemExit(f"PyMuPDF required: {exc}")
-d=fitz.open(pdf)
-if len(d)!=1: raise SystemExit(f"poster must be one page, got {len(d)}")
-page=d[0]
-target_w=1800
-scale=target_w/page.rect.width
-pix=page.get_pixmap(matrix=fitz.Matrix(scale,scale),alpha=False)
+d = fitz.open(pdf)
+if len(d) != 1:
+    raise SystemExit(f"poster must be one page, got {len(d)}")
+page = d[0]
+target_w = 1800
+scale = target_w / page.rect.width
+pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
 pix.save(png)
 d.close()
 html_path.unlink(missing_ok=True)
-shutil.rmtree(profile,ignore_errors=True)
-if repo.name=="mcp-agent-security-gateway":
-    shutil.copy2(pdf,repo/"MCP_Gateway_Poster.pdf")
-print(repo.name, "pdf_bytes=",pdf.stat().st_size,"png_bytes=",png.stat().st_size)
+shutil.rmtree(profile, ignore_errors=True)
+if repo.name == "mcp-agent-security-gateway":
+    shutil.copy2(pdf, repo / "MCP_Gateway_Poster.pdf")
+print(repo.name, "pdf_bytes=", pdf.stat().st_size, "png_bytes=", png.stat().st_size)

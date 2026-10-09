@@ -33,6 +33,6 @@ jobs:
       - name: Unit and integration tests
         run: python -m pytest -q --timeout=120
       - name: Static quality gate
-        run: python -m ruff check src tests
+        run: python -m ruff check .
       - name: Build/release smoke check
         run: python -m build

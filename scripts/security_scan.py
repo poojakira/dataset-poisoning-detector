@@ -17,9 +17,30 @@ SENSITIVE_NAMES = {
 }
 SENSITIVE_SUFFIXES = {".pem", ".p12", ".pfx", ".key", ".jks", ".keystore", ".pkcs12"}
 TEXT_SUFFIXES = {
-    ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".json", ".yaml", ".yml",
-    ".toml", ".ini", ".cfg", ".conf", ".md", ".txt", ".sh", ".ps1", ".html", ".css",
-    ".xml", ".properties", ".csv", ".env",
+    ".py",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".mjs",
+    ".cjs",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".md",
+    ".txt",
+    ".sh",
+    ".ps1",
+    ".html",
+    ".css",
+    ".xml",
+    ".properties",
+    ".csv",
+    ".env",
 }
 
 SECRET_PATTERNS = {
@@ -36,18 +57,33 @@ SECRET_PATTERNS = {
     "private key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
 }
 
-PINNED_ACTION = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-fA-F]{40}$")
+PINNED_ACTION = re.compile(
+    r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-fA-F]{40}$"
+)
 PLACEHOLDER_WORDS = (
-    "PLACEHOLDER", "REDACTED", "EXAMPLE", "TEST FIXTURE", "CHANGEME",
-    "REPLACE_ME", "REPLACE-WITH", "YOUR_", "YOUR-", "DUMMY", "FAKE",
+    "PLACEHOLDER",
+    "REDACTED",
+    "EXAMPLE",
+    "TEST FIXTURE",
+    "CHANGEME",
+    "REPLACE_ME",
+    "REPLACE-WITH",
+    "YOUR_",
+    "YOUR-",
+    "DUMMY",
+    "FAKE",
 )
 
 
 def tracked_files() -> list[Path]:
-    raw = subprocess.check_output(
-        ["git", "-C", str(ROOT), "ls-files", "-z"],
-        text=False,
-    ).decode().split("\0")
+    raw = (
+        subprocess.check_output(
+            ["git", "-C", str(ROOT), "ls-files", "-z"],
+            text=False,
+        )
+        .decode()
+        .split("\0")
+    )
     return [ROOT / item for item in raw if item]
 
 
@@ -75,7 +111,7 @@ def scan_tracked_files() -> list[str]:
         text = path.read_text(encoding="utf-8", errors="ignore")
         for label, pattern in SECRET_PATTERNS.items():
             for match in pattern.finditer(text):
-                nearby = text[max(0, match.start() - 100): match.end() + 100].upper()
+                nearby = text[max(0, match.start() - 100) : match.end() + 100].upper()
                 if any(word in nearby for word in PLACEHOLDER_WORDS):
                     continue
                 failures.append(f"{rel}: possible {label}")
@@ -112,7 +148,7 @@ def scan_workflows() -> list[str]:
                     f"{rel}:{index + 1}: action is not pinned to a 40-char commit SHA: {action}"
                 )
             if action.lower().startswith("actions/checkout@"):
-                block = "\n".join(lines[index:index + 10])
+                block = "\n".join(lines[index : index + 10])
                 if not re.search(r"(?m)^\s*persist-credentials:\s*false\s*$", block):
                     failures.append(
                         f"{rel}:{index + 1}: actions/checkout must set persist-credentials: false"
