@@ -1,1 +1,1 @@
-﻿"""Local reproducible dataset benchmark modules."""
+"""Local reproducible dataset benchmark modules."""
