@@ -1,15 +1,3 @@
-<!-- security-systems-poster -->
-## Research Poster
-
-**Security Systems / 04 — Statistical Screening for Poisoned Machine-Learning Training Data**
-
-[![Research poster](poster/poster.png)](poster/poster_36x48.pdf)
-
-> Technical research poster (36 x 48 in). Click the image for the print-resolution **[PDF](poster/poster_36x48.pdf)**.
-> Poster measurements are dated snapshots at their printed commits. Use the repository evidence files for newer results; do not read the poster as a verification of the latest `main`.
-> The poster preserves its dated measurements. Test totals include legacy stub-only demonstrations; see [current validation boundaries](docs/verification-2026-10-09.md).
-<!-- security-systems-poster -->
-
 # Dataset Poisoning Detector
 
 > Statistical + spectral screening for poisoned ML training data at the ingestion boundary — honest about what feature-space methods can and cannot catch.
@@ -518,6 +506,18 @@ Based on the repository structure and identified limitations:
 - [INCIDENT_RUNBOOK.md](INCIDENT_RUNBOOK.md) - incident response for streaming pipeline issues
 - [docs/DETECTION_EFFICACY.md](docs/DETECTION_EFFICACY.md) - honest detection performance assessment per method
 - [benchmarks/throughput_tracker.py](benchmarks/throughput_tracker.py) - streaming/efficacy microbenchmark and CI sanity/reproducibility gate (not a hardware performance SLA)
+
+<!-- security-systems-poster -->
+## Research Poster
+
+**Security Systems / 04 — Statistical Screening for Poisoned Machine-Learning Training Data**
+
+[![Research poster](poster/poster.png)](poster/poster_36x48.pdf)
+
+> Technical research poster (36 x 48 in). Click the image for the print-resolution **[PDF](poster/poster_36x48.pdf)**.
+> Poster measurements are dated snapshots at their printed commits. Use the repository evidence files for newer results; do not read the poster as a verification of the latest `main`.
+> The poster preserves its dated measurements. Test totals include legacy stub-only demonstrations; see [current validation boundaries](docs/verification-2026-10-09.md).
+<!-- security-systems-poster -->
 
 ## License and Author
 
