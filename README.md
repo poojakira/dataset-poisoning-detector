@@ -357,10 +357,20 @@ curl -X POST http://localhost:8000/score \
 
 ### Running Tests
 
+Install the test and realtime extras first. The API-layer tests import `fastapi`
+and `pydantic-settings`, so without the `realtime` extra three test modules fail
+to collect:
+
 ```bash
+pip install -e ".[dev,realtime]"
 pytest tests/ -v
 pytest tests/ -v --cov=poison_detector --cov-report=term-missing
 ```
+
+With `.[dev,realtime]` installed, the suite collects cleanly. A local run on
+Python 3.12.10 (Windows) produced **226 passed** with no failures.
+Test counts and coverage are environment- and commit-specific; treat this as a
+dated local snapshot rather than a guaranteed result for every commit.
 
 ---
 
