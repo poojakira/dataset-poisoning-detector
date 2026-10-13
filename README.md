@@ -1,10 +1,12 @@
+> **READ THIS LICENSE BEFORE USING THIS REPOSITORY.** Owner-controlled new releases are subject to the [proprietary All Rights Reserved LICENSE](LICENSE): copying, modification, and redistribution require written authorization except where law or GitHub's Terms allow. Previously granted MIT rights remain valid for versions covered by that license; see the [historical license](docs/license-history/LICENSE-BEFORE-2026-10-13.txt). Third-party rights remain unaffected.
+
 # Dataset Poisoning Detector
 
 > Statistical + spectral screening for poisoned ML training data at the ingestion boundary — honest about what feature-space methods can and cannot catch.
 
 [![CI](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml/badge.svg)](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/production_tests-186%20passing-brightgreen)](docs/verification-2026-10-09.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
 **Maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira))
 
@@ -521,7 +523,7 @@ Based on the repository structure and identified limitations:
 
 ## License and Author
 
-MIT License. See [LICENSE](LICENSE) for full text.
+Proprietary / All Rights Reserved. See [LICENSE](LICENSE); prior MIT grants remain applicable to the versions covered by them.
 
 Author: [poojakira](https://github.com/poojakira)
 
