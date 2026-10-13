@@ -5,26 +5,17 @@
 > Statistical + spectral screening for poisoned ML training data at the ingestion boundary — honest about what feature-space methods can and cannot catch.
 
 [![CI](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml/badge.svg)](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/production_tests-186%20passing-brightgreen)](docs/verification-2026-10-09.md)
 [![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
 **Maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira))
 
+## Current local verification — 2026-10-13
+
+**232 passed, 0 skipped (including 40 legacy stub tests; 192 excluding those); 91.7766% statement coverage (2087/2274).** Python 3.12.14, local execution against the remediation revision. These results are not security-effectiveness, deployment, or remote-CI evidence. See [commands, scope and limitations](docs/verification-2026-10-13.md) and [historical runs](previos_runs.md). Dated posters and benchmark artifacts have not been rerun or regenerated in this pass.
+
 ## Overview
 
 `dataset-poisoning-detector` applies statistical (z-score, IQR, Isolation Forest, ensemble) and spectral (top-1 and label-aware cross-class centroid) screening to training-data batches and streams at the ingestion boundary (MITRE ATLAS AML.T0020). It ships a Kafka streaming path, Prometheus metrics, Docker, and a reproducible benchmark harness. It is a **screening layer, not a complete defense**: feature-space statistics are strong on gross corruption and outlier injection but weak on clean-label and subtle attacks — and the README documents exactly where.
-
-## Verified Snapshot
-
-Local remediation verification on Python 3.12.14 on 2026-10-09, based on main `e98bcff7bc252e6334bc6e27bedf3bd57ba21cfb` plus PR 83 and the follow-up fixes. This is not a claim that the new branch has passed remote CI. Legacy stub-only tests are excluded from the production-facing count; see [commands and limitations](docs/verification-2026-10-09.md). Label-flip F1 is transcribed from the committed `results/spectral_benchmark.json` and was not rerun during this verification.
-
-| Metric | Dated verified result |
-|---|---:|
-| Production-facing tests | 186 passing, 0 skipped (226 including 40 legacy stub tests) |
-| Statement coverage | 91.7512% (2080/2267 statements; CI gate 90%) |
-| Detection methods | z-score, IQR, Isolation Forest, ensemble, spectral top-1, cross-class centroid, streaming |
-| Cross-class label-flip F1 | 0.55 / 0.60 / 0.70 @ 5% / 10% / 20% poison |
-| Feature-space ensemble (CIFAR-10 raw pixels) | AUC ~0.53–0.56 (near-random — documented limitation) |
 
 ## Security Problem
 
@@ -448,7 +439,7 @@ The engineering value of this project is primarily in the streaming infrastructu
 | Quarantine storage | Yes | Redis (streaming) + SQLite (batch) |
 
 > **Storage boundary:** `PostgresStore` is a deliberate stub and raises `NotImplementedError`; PostgreSQL quarantine persistence is **not implemented or supported** in the current repository. Supported paths are Redis for streaming quarantine and SQLite for batch/local storage.
-| Test coverage | Yes | Local 2026-10-09 Python 3.12 verification: 186 production-facing tests passing, 0 skipped; 226 including 40 legacy stub-only demonstrations. Coverage is 91.7512%; this does not certify every component or deployment. |
+| Test coverage | See [current local verification](docs/verification-2026-10-13.md). |
 | CI/CD | Yes | GitHub Actions (`.github/` directory) |
 | Runbook | Yes | `RUNBOOK.md` with operational procedures |
 | Changelog | Yes | `CHANGELOG.md` with version history |
@@ -542,23 +533,6 @@ Building this taught a few things worth sharing:
 **Defense-in-depth means every layer contributes signal, even imperfect ones.** A screening layer that catches 10% of attacks at zero latency cost is still a net security improvement when combined with downstream defenses. Perfect is the enemy of deployed.
 
 <!-- repo-verification:start -->
-## Verification update — 2026-09-30
-
-- **Scope:** Account-wide `poojakira` repository pass covering source/configuration, CI/release workflows, security-hygiene gates, dependency/SAST controls, and documentation consistency.
-- **Remediation:** Pinned the PyPI publish action to an immutable commit and rechecked the repository security posture without weakening API-key, rate-limit, or validation controls.
-- **Verification state:** The latest completed core CI, Production Gate, Security Hygiene, and Documentation Integrity checks were green before the release-workflow pin; the pin itself is repository-only hardening.
-- **Security note:** Production rate limiting and authentication remain fail-closed as documented; no synthetic benchmark result is presented as production efficacy.
-- **Evidence boundary:** This update records repository and GitHub Actions evidence observed during the pass. It is not a claim of independent penetration testing, production deployment, or zero residual risk.
-<!-- repo-verification:end -->
-
-## Verification checkpoint — 2026-09-30
-
-- **Checked snapshot:** `7e1efe303174d67cf7b82368d151d8a7f421743b`
-- **Status:** VERIFIED GREEN
-- **Evidence:** CI, Production Gate, Security Hygiene, and Documentation Integrity completed successfully for the cited checked snapshot.
-- This record is immutable and date-bounded. Later `main` commits may be newer; consult GitHub Actions for the latest run state. It does not claim zero vulnerabilities or universal production readiness.
-
-
 ## Secret handling
 
 Keep runtime credentials outside Git. If this repository provides an `.env.example` or `.env.sample`, copy it to a local `.env` or `.env.local` and fill in values locally; the real environment file must remain untracked.

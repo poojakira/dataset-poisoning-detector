@@ -232,6 +232,11 @@ def scan_hf_dataset(
                 break
     result.label_column = label_column
 
+    if label_column is not None and any(row.get(label_column) is None for row in rows):
+        result.rows_scanned = len(rows)
+        result.errors.append("label column is missing or null in one or more rows")
+        return result
+
     X, labels, feature_cols = _numeric_matrix(rows, label_column)
     result.rows_scanned = len(rows)
     result.feature_columns = feature_cols
@@ -241,6 +246,10 @@ def scan_hf_dataset(
         return result
     if X.shape[1] == 0:
         result.errors.append("no numeric feature columns to analyze")
+        return result
+
+    if not np.isfinite(X).all():
+        result.errors.append("numeric features must be finite")
         return result
 
     report = spectral_detect(X, labels)
