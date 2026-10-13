@@ -1,0 +1,53 @@
+{
+  "repository": "dataset-poisoning-detector",
+  "title": "Statistical Screening for Poisoned Machine-Learning Training Data",
+  "subtitle": "Detection and Quarantine of Suspicious Samples at the Data-Ingestion Boundary",
+  "license": "MIT",
+  "source_commit": "e3d9870f7e095d49b0f4bf61acfb991604bdc028",
+  "test_commit": "43313ee7dab746a27999e22796074e4a0d941322",
+  "ci_run": 37169444656,
+  "ci_date": "2026-10-04",
+  "cards": [
+    {
+      "value": "200",
+      "label": "tests passed in cited CI"
+    },
+    {
+      "value": "91.20%",
+      "label": "statement coverage at cited CI"
+    },
+    {
+      "value": "0.55",
+      "label": "centroid F1, synthetic 5% label flips"
+    },
+    {
+      "value": "0.6975",
+      "label": "centroid F1, synthetic 20% label flips"
+    }
+  ],
+  "contribution": "An ingestion-boundary screening pipeline combining statistical outlier methods with a label-aware cross-class centroid detector that improves the committed synthetic label-flip benchmark from the old top-1 spectral baseline 0.08 / 0.23 / 0.3675 F1 to 0.55 / 0.595 / 0.6975 F1 at 5% / 10% / 20% contamination.",
+  "methods": [
+    "Validate incoming feature batches and streaming samples.",
+    "Apply z-score, IQR, Isolation Forest, and spectral/label-aware detectors.",
+    "Combine detector signals for screening and quarantine workflows.",
+    "Maintain streaming state and deduplication metadata.",
+    "Benchmark label-flip behavior with committed reproducible artifacts."
+  ],
+  "evidence": [
+    "Cited Python 3.12 CI: 200 passed; 91.20% statement coverage, same test job.",
+    "Committed synthetic experiment: 2,000 samples, 100 features, class separation 2.0, seed 2018; not production data.",
+    "At 5/10/20% random class-0-to-class-1 label flips, centroid F1 = 0.55/0.595/0.6975; old top-1 spectral F1 = 0.08/0.23/0.3675; ensemble F1 = 0.0841/0.1421/0.2331.",
+    "Result source: results/spectral_benchmark.json. Recorded artifact values were checked; no new population efficacy estimate is made."
+  ],
+  "limitations": [
+    "The benchmark is synthetic and separable; it is not proof of production detection rate.",
+    "Clean-label, subtle backdoor, and very-low-rate poisoning remain difficult.",
+    "Throughput is hardware/environment dependent; no fixed product SLA is claimed.",
+    "Stateful streaming behavior requires deliberate partitioning/external state for horizontal scaling."
+  ],
+  "reproduction": [
+    "git checkout 43313ee7dab746a27999e22796074e4a0d941322",
+    "Install the documented development dependencies; run python -m pytest tests/ -q. Use the cited job configuration when reproducing coverage.",
+    "Benchmark data, adapters and environment requirements are separate; consult poster/13_reproducibility.md and the claim ledger."
+  ]
+}

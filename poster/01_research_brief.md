@@ -26,13 +26,13 @@ An ingestion-boundary screening pipeline combining statistical outlier methods w
 4. Maintain streaming state and deduplication metadata.
 5. Benchmark label-flip behavior with committed reproducible artifacts.
 
-## Current Verified Evidence
+## Verified Evidence at Cited Snapshot
 
-Current-main Python 3.12 verification reports:
+Cited snapshot Python 3.12 verification reports:
 
 - **200 tests passed**, 0 skipped.
 - **91.20% statement coverage**; CI gate is 90%.
-- Ruff check/format and Pyright pass on the final branch; GitHub currently reports 0 open Code Scanning, Dependabot, and secret-scanning alerts.
+Cited CI lint/format and type-check jobs passed; current open Code Scanning, Dependabot and secret-scanning alert totals were not queried by this audit.
 - Committed `results/spectral_benchmark.json` records cross-class centroid F1:
   - **0.55** at 5% contamination
   - **0.595** at 10%
@@ -59,3 +59,10 @@ python benchmark/cifar10_label_flip_benchmark.py
 ```
 
 Expected current evidence: **200 passed**, **91.20% coverage**.
+
+
+## Claim audit and rendered-source boundary, October 13, 2026 UTC
+
+The reviewed printed claims, source and test commit anchors, CI dates and benchmark limitations are in `verified_claims.json`. The PDF is generated from that manifest and the PNG is rasterized from the same page by `render_poster.py`. Source inventory, dated CI and separate reported experiments must not be combined into one result. Earlier artifact versions remain in Git history; these corrections do not assert production readiness.
+
+Offline poster rendering: `python -m pip install reportlab==4.4.9 PyMuPDF==1.26.6`, then `python poster/render_poster.py`. The font is bundled with the pinned ReportLab package; no browser or network fetch is used during rendering.
