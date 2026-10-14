@@ -5,7 +5,7 @@
 > Statistical + spectral screening for poisoned ML training data at the ingestion boundary — honest about what feature-space methods can and cannot catch.
 
 [![CI](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml/badge.svg)](https://github.com/poojakira/dataset-poisoning-detector/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/production_tests-186%20passing-brightgreen)](docs/verification-2026-10-09.md)
+[![Tests](https://img.shields.io/badge/production_tests-200%20passing-brightgreen)](docs/verification-2026-10-09.md)
 [![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
 **Maintainer:** Pooja Kiran ([@poojakira](https://github.com/poojakira))
@@ -20,8 +20,8 @@ Local remediation verification on Python 3.12.14 on 2026-10-09, based on main `e
 
 | Metric | Dated verified result |
 |---|---:|
-| Production-facing tests | 186 passing, 0 skipped (226 including 40 legacy stub tests) |
-| Statement coverage | 91.7512% (2080/2267 statements; CI gate 90%) |
+| Production-facing tests | 200 passing, 0 skipped (240 including 40 legacy stub tests) |
+| Statement coverage | 91.20% (CI gate 90%) |
 | Detection methods | z-score, IQR, Isolation Forest, ensemble, spectral top-1, cross-class centroid, streaming |
 | Cross-class label-flip F1 | 0.55 / 0.60 / 0.70 @ 5% / 10% / 20% poison |
 | Feature-space ensemble (CIFAR-10 raw pixels) | AUC ~0.53–0.56 (near-random — documented limitation) |
@@ -448,7 +448,7 @@ The engineering value of this project is primarily in the streaming infrastructu
 | Quarantine storage | Yes | Redis (streaming) + SQLite (batch) |
 
 > **Storage boundary:** `PostgresStore` is a deliberate stub and raises `NotImplementedError`; PostgreSQL quarantine persistence is **not implemented or supported** in the current repository. Supported paths are Redis for streaming quarantine and SQLite for batch/local storage.
-| Test coverage | Yes | Local 2026-10-09 Python 3.12 verification: 186 production-facing tests passing, 0 skipped; 226 including 40 legacy stub-only demonstrations. Coverage is 91.7512%; this does not certify every component or deployment. |
+| Test coverage | Yes | Current verified result: 200 production-facing tests passing, 0 skipped; 240 including 40 legacy stub-only demonstrations. Coverage is 91.20%; this does not certify every component or deployment. |
 | CI/CD | Yes | GitHub Actions (`.github/` directory) |
 | Runbook | Yes | `RUNBOOK.md` with operational procedures |
 | Changelog | Yes | `CHANGELOG.md` with version history |
