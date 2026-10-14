@@ -1,6 +1,6 @@
 # Research Brief - Poster 04
 
-> Evidence status: Refreshed against final main code snapshot `43313ee7dab746a27999e22796074e4a0d941322`. GitHub Actions Python 3.12 verification on 2026-10-04 reproduced 200 passing tests at 91.20% statement coverage; CI now enforces a 90% floor.
+> Evidence status: Current main code snapshot `45740923aa16539909a7ae993104a80ecfe85e0b`; [Python 3.12 CI run 38502623976](https://github.com/poojakira/dataset-poisoning-detector/actions/runs/38502623976) (2026-10-14 UTC) passed **226 tests** (186 production-facing plus 40 legacy stub-only tests) at **91.75% statement coverage**, with a 90% CI floor. Historical October 4 poster snapshot (200 tests / 91.20%) remains separately archived.
 
 ## Repository
 
@@ -26,12 +26,12 @@ An ingestion-boundary screening pipeline combining statistical outlier methods w
 4. Maintain streaming state and deduplication metadata.
 5. Benchmark label-flip behavior with committed reproducible artifacts.
 
-## Current Verified Evidence
+## Verified Current CI and Separately Pinned Benchmark Evidence
 
-Current-main Python 3.12 verification reports:
+Current-main Python 3.12 CI run 38502623976 reports:
 
-- **200 tests passed**, 0 skipped.
-- **91.20% statement coverage**; CI gate is 90%.
+- **226 tests passed**, 0 skipped (186 production-facing and 40 legacy demonstration/stub tests).
+- **91.75% statement coverage**; CI gate is 90%.
 - Ruff check/format and Pyright pass on the final branch; GitHub currently reports 0 open Code Scanning, Dependabot, and secret-scanning alerts.
 - Committed `results/spectral_benchmark.json` records cross-class centroid F1:
   - **0.55** at 5% contamination
@@ -58,4 +58,4 @@ pytest tests/ -q --cov=poison_detector --cov-report=term
 python benchmark/cifar10_label_flip_benchmark.py
 ```
 
-Expected current evidence: **200 passed**, **91.20% coverage**.
+Expected current CI evidence: **226 passed**, **91.75% coverage** (includes 40 legacy stub tests).
