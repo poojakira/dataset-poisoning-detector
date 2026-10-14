@@ -110,9 +110,9 @@ evidence_runs = list(
     )
 )
 if evidence_shas:
-    repro += "\nMeasured code snapshot: " + "; ".join(evidence_shas)
+    repro += "\nMeasured code snapshot: " + evidence_shas[0]
 if evidence_runs:
-    repro += "\nEvidence CI run: " + "; ".join(evidence_runs)
+    repro += "\nEvidence CI run: " + evidence_runs[0]
 
 metrics = []
 headline_match = re.search(
