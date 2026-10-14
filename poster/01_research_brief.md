@@ -52,7 +52,7 @@ Current-main Python 3.12 CI run 38502623976 reports:
 ```bash
 git clone https://github.com/poojakira/dataset-poisoning-detector.git
 cd dataset-poisoning-detector
-git checkout 43313ee7dab746a27999e22796074e4a0d941322
+git checkout 45740923aa16539909a7ae993104a80ecfe85e0b
 python -m pip install -e ".[dev,realtime,kafka]"
 pytest tests/ -q --cov=poison_detector --cov-report=term
 python benchmark/cifar10_label_flip_benchmark.py
