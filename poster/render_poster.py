@@ -8,17 +8,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-repo = Path(
-    sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]
-).resolve()
+repo = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]).resolve()
 poster = repo / "poster"
 brief = poster / "01_research_brief.md"
 metrics_path = poster / "03_verified_metrics.md"
 text = brief.read_text(encoding="utf-8", errors="replace")
 metrics_text = (
-    metrics_path.read_text(encoding="utf-8", errors="replace")
-    if metrics_path.exists()
-    else ""
+    metrics_path.read_text(encoding="utf-8", errors="replace") if metrics_path.exists() else ""
 )
 
 
@@ -37,9 +33,7 @@ def clean(s: str) -> str:
 
 def sec(*names: str) -> str:
     for name in names:
-        m = re.search(
-            r"(?ms)^##+\s+" + re.escape(name) + r"\s*$\n(.*?)(?=^##+\s+|\Z)", text
-        )
+        m = re.search(r"(?ms)^##+\s+" + re.escape(name) + r"\s*$\n(.*?)(?=^##+\s+|\Z)", text)
         if m:
             return m.group(1).strip()
     return ""
@@ -65,14 +59,9 @@ def esc(s: str) -> str:
     return html.escape(s, quote=True)
 
 
-title = (
-    clean(sec("Academic Project Title", "Project Title"))
-    or repo.name.replace("-", " ").title()
-)
+title = clean(sec("Academic Project Title", "Project Title")) or repo.name.replace("-", " ").title()
 subtitle = clean(sec("Subtitle"))
-contribution = clean(
-    sec("One-Sentence Contribution", "Contribution", "Research Contribution")
-)
+contribution = clean(sec("One-Sentence Contribution", "Contribution", "Research Contribution"))
 methods = items(sec("Method", "Methodology"))[:6]
 evidence = items(
     sec(
@@ -95,19 +84,14 @@ limits = items(
 repro_block = sec("Reproducibility")
 repro = strip_fences(repro_block)[:900]
 repository = (
-    clean(sec("Repository"))
-    or f"github.com/poojakira/{repo.name.replace('_readonly_', '')}"
+    clean(sec("Repository")) or f"github.com/poojakira/{repo.name.replace('_readonly_', '')}"
 )
 
 
 # Print the measured evidence snapshot, not the commit that only rendered the artwork.
 evidence_shas = list(dict.fromkeys(re.findall(r"\b[0-9a-f]{40}\b", metrics_text)))
 evidence_runs = list(
-    dict.fromkeys(
-        re.findall(
-            r"(?:actions/runs/|run\s+`?)([0-9]{8,})", metrics_text, re.IGNORECASE
-        )
-    )
+    dict.fromkeys(re.findall(r"(?:actions/runs/|run\s+`?)([0-9]{8,})", metrics_text, re.IGNORECASE))
 )
 if evidence_shas:
     repro += "\nMeasured code snapshot: " + evidence_shas[0]
@@ -115,9 +99,7 @@ if evidence_runs:
     repro += "\nEvidence CI run: " + evidence_runs[0]
 
 metrics = []
-headline_match = re.search(
-    r"(?ms)^##+\s+Headline cards\s*$\n(.*?)(?=^##+\s+|\Z)", metrics_text
-)
+headline_match = re.search(r"(?ms)^##+\s+Headline cards\s*$\n(.*?)(?=^##+\s+|\Z)", metrics_text)
 if headline_match:
     for line in headline_match.group(1).splitlines():
         m = re.match(r"^\s*[-*]\s+(.+?)\s+(?:\u2014|\u2013|-)\s+(.+?)\s*$", line)
@@ -149,9 +131,7 @@ if not methods:
         "Record reproducible evidence",
     ]
 if not evidence:
-    evidence = [
-        "See README, verified metrics, tests, and CI for the current evidence snapshot."
-    ]
+    evidence = ["See README, verified metrics, tests, and CI for the current evidence snapshot."]
 if not limits:
     limits = [
         "No additional limitation text was found in the research brief. Consult the README before generalizing results."
@@ -161,13 +141,7 @@ if not repro:
 
 
 def bullets(xs: list[str], cls="") -> str:
-    return (
-        '<ul class="'
-        + cls
-        + '">'
-        + "".join("<li>" + esc(x) + "</li>" for x in xs)
-        + "</ul>"
-    )
+    return '<ul class="' + cls + '">' + "".join("<li>" + esc(x) + "</li>" for x in xs) + "</ul>"
 
 
 def title_class(s: str) -> str:
@@ -191,19 +165,17 @@ if not metric_cards:
 
 flow_nodes = ""
 for i, m in enumerate(methods, 1):
-    flow_nodes += f'<div class="flow-node"><div class="flow-index">{i:02d}</div><div>{esc(m)}</div></div>'
+    flow_nodes += (
+        f'<div class="flow-node"><div class="flow-index">{i:02d}</div><div>{esc(m)}</div></div>'
+    )
 
 method_rows = ""
 for i, m in enumerate(methods, 1):
-    method_rows += (
-        f'<div class="method-row"><span>{i:02d}</span><div>{esc(m)}</div></div>'
-    )
+    method_rows += f'<div class="method-row"><span>{i:02d}</span><div>{esc(m)}</div></div>'
 
 evidence_chips = ""
 for i, e in enumerate(evidence[:10], 1):
-    evidence_chips += (
-        f'<div class="e-chip"><span>EV-{i:02d}</span><div>{esc(e)}</div></div>'
-    )
+    evidence_chips += f'<div class="e-chip"><span>EV-{i:02d}</span><div>{esc(e)}</div></div>'
 
 css = r"""
 @page { size: 36in 48in; margin: 0; }
@@ -314,8 +286,7 @@ doc += (
     + "</div></section>"
 )
 prov_html = "".join(
-    f'<div class="prov-card"><strong>{esc(a)}</strong><p>{esc(b)}</p></div>'
-    for a, b in prov
+    f'<div class="prov-card"><strong>{esc(a)}</strong><p>{esc(b)}</p></div>' for a, b in prov
 )
 doc += (
     '<section class="lower"><div class="panel limits"><h2>Limitations and Residual Risk</h2>'
