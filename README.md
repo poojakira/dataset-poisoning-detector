@@ -64,7 +64,7 @@ DetectionReport (per-sample anomaly scores)  -->  quarantine + Prometheus metric
 
 ## What This Does
 
-I built this because we kept getting bitten by slow data corruption. A vendor feed drifts, or someone pushes bad features to a shared table, and three retraining cycles later your model's precision has quietly dropped 13 points. Nobody thinks to check the data because the pipeline didn't error out.
+Training-data corruption can be difficult to spot during routine ingestion. A drifting vendor feed or mislabeled feature batch may degrade later model performance without an immediate pipeline error. This repository provides screening controls and bounded benchmarks for those risks; it does not claim to document an observed customer incident or a measured 13-point precision drop.
 
 This tool sits at the ingestion boundary (MITRE ATLAS AML.T0020) and applies statistical tests to every incoming sample. It won't catch sophisticated targeted attacks, but it catches the dumb stuff fast: corrupted feature vectors, distribution shifts, gross outliers. It produces structured logs so you have an audit trail of what went into training and what got flagged.
 
